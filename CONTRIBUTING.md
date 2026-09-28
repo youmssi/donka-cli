@@ -5,11 +5,11 @@ fork-specific rules from `AGENTS.md`.
 
 ## Branches
 
-| Branch           | Role                           | Who writes to it                                    |
-| ---------------- | ------------------------------ | --------------------------------------------------- |
-| `main`           | What users install             | Release PRs only (`develop` → `main`, merge commit) |
-| `develop`        | The next release, always green | Squash-merged story PRs only                        |
-| `dnk-<n>-<slug>` | One story                      | Its author                                          |
+| Branch           | Role                           | Who writes to it                                      |
+| ---------------- | ------------------------------ | ----------------------------------------------------- |
+| `main`           | What users install             | Promotion PRs (`develop` → `main`) and the release PR |
+| `develop`        | The next release, always green | Squash-merged story PRs only                          |
+| `dnk-<n>-<slug>` | One story                      | Its author                                            |
 
 Repository settings (GitHub → Settings): squash and merge commits allowed, rebase disabled, head
 branches deleted automatically; rulesets on `main` and `develop` requiring a pull request and

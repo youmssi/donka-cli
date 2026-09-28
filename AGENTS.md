@@ -62,8 +62,10 @@ progress; ready when checks are green.
 
 ## 7. Releases
 
-`develop` → `main` through a release PR merged with a merge commit. Until DNK-21 replaces it,
-the upstream release workflow on `main` is not used to publish.
+`develop` → `main` through a promotion PR merged with a merge commit; release-please's release PR
+on `main` then sets the version and `CHANGELOG.md`, tags it, and opens a back-merge PR into
+`develop` (merge commit). Nothing is published to npm: the upstream `@gorules/cli` publish job
+is removed, and DNK-21 decides how Donka CLI ships.
 
 ## 8. Repository map
 
