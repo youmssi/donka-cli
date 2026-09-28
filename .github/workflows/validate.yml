@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - develop
 
 permissions:
   contents: read
@@ -13,7 +14,6 @@ jobs:
   codequality:
     name: 'Code quality'
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
@@ -38,3 +38,6 @@ jobs:
 
       - name: 'Typecheck'
         run: pnpm typecheck
+
+      - name: 'Build'
+        run: pnpm build
