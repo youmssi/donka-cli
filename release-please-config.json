@@ -49,7 +49,8 @@
         "actions/pull/action.yml",
         "templates/gitlab-ci-pull.yml",
         "templates/azure-pipelines-pull.yml",
-        "README.md"
+        "README.md",
+        "docs/ci-templates.md"
       ]
     }
   }
