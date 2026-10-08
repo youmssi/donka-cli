@@ -19,6 +19,11 @@ export default defineConfig(
   {
     rules: {
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
+      // node:test runs the promises describe and it return
+      '@typescript-eslint/no-floating-promises': [
+        'error',
+        { allowForKnownSafeCalls: [{ from: 'package', package: 'node:test', name: ['describe', 'it'] }] },
+      ],
     },
   },
 );

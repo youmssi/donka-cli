@@ -1,8 +1,8 @@
-GoRules BRMS — Business rules management system.
+Donka — decision management for credit and risk teams.
 
 Use this tool when the user asks about rules, business rules, rules generation, extracting logic into rules, or anything related to decision management.
 
-WORKFLOW: The first tool to call is **get_system_context** to get instructions, available tools, and information about GoRules.
+WORKFLOW: The first tool to call is **get_system_context** to get instructions, available tools, and information about Donka.
 
 HTTP ENDPOINTS:
 The bridge exposes REST endpoints for local development (port defaults to 41919).

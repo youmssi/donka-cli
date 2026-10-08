@@ -17,11 +17,11 @@ const describeFailure = (result: SyncDeploymentResult, project: string, target: 
   switch (result.action) {
     case 'no_access':
       return new CliError(
-        `The access token cannot reach project "${project}". Check that the project exists and that the token's project scope includes it.`,
+        `The CI token cannot reach project "${project}". Check the project key and that the token was issued in that project's settings.`,
       );
     case 'no_release':
       return new CliError(
-        `Nothing is deployed to "${target}" in project "${project}". Deploy a release to it first.`,
+        `Nothing to pull for "${target}" in project "${project}": no release yet, or nothing live in that environment.`,
         EXIT_NO_RELEASE,
       );
     case 'error':
@@ -34,18 +34,18 @@ const describeFailure = (result: SyncDeploymentResult, project: string, target: 
 export const pull = defineCommand({
   meta: {
     name: 'pull',
-    description: 'Download the rules artifact for a project target',
+    description: "Download a project's release artifact",
   },
   args: {
     project: {
       type: 'string',
-      description: 'Project key or id (env: GORULES_PROJECT)',
+      description: 'Project key or id (env: DONKA_PROJECT)',
       alias: 'p',
     },
     target: {
       type: 'string',
       description:
-        "Target: 'main', 'branch:<id>', 'commit:<id>', 'release:<version>' or 'env:<key>' (env: GORULES_TARGET)",
+        "Target: 'main' (newest release), 'commit:<release id>', 'release:<version>' or 'env:<staging|production>' (env: DONKA_TARGET)",
       alias: 't',
     },
     out: {
@@ -72,19 +72,20 @@ export const pull = defineCommand({
     },
     current: {
       type: 'string',
-      description: 'Release or commit id already held; exits 3 when unchanged',
+      description:
+        "The commit id from a previous pull (release id, or deployment id for 'env:'); exits 3 when unchanged",
     },
-    url: { type: 'string', description: 'BRMS API URL (env: GORULES_URL)', alias: 'u' },
-    token: { type: 'string', description: 'Access token (env: GORULES_TOKEN)' },
+    url: { type: 'string', description: 'Donka Studio URL (env: DONKA_URL)', alias: 'u' },
+    token: { type: 'string', description: 'CI token from the project settings (env: DONKA_TOKEN)' },
     json: { type: 'boolean', description: 'Print the result as JSON', default: false },
   },
   async run({ args }) {
     const options = resolveApiOptions(args);
-    const project = args.project || process.env.GORULES_PROJECT;
-    const target = args.target || process.env.GORULES_TARGET || 'main';
+    const project = args.project || process.env.DONKA_PROJECT;
+    const target = args.target || process.env.DONKA_TARGET || 'main';
 
     if (!project) {
-      throw new CliError('Missing project. Pass --project or set GORULES_PROJECT.', 2);
+      throw new CliError('Missing project. Pass --project or set DONKA_PROJECT.', 2);
     }
     if (args.delete && !args.unpack) {
       throw new CliError('--delete only applies when extracting. Add --unpack.', 2);
@@ -118,8 +119,7 @@ export const pull = defineCommand({
     const buffer = await downloadArtifact(options, result.artifact);
     const digest = createHash('sha256').update(buffer).digest('hex');
 
-    // Verified only when the server supplied a digest: self-hosted installs
-    // without CDN configuration serve the artifact directly and send none.
+    // Verified only when the server supplied a digest; Studio always does.
     if (result.artifact.sha256 && result.artifact.sha256.toLowerCase() !== digest) {
       throw new CliError('Artifact checksum mismatch: the download does not match what the server published.');
     }

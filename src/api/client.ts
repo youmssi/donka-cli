@@ -44,23 +44,27 @@ export interface SyncResponse {
 }
 
 /**
- * Trailing slashes and a trailing `/api` are both accepted so a copied browser
- * URL and a documented API base behave the same.
+ * Studio serves its API under `/api/v1`. The Studio address, `<studio>/api` and
+ * `<studio>/api/v1` are all accepted, with or without a trailing slash, so a
+ * copied browser URL and a documented API base behave the same.
  */
 export const normalizeApiUrl = (url: string): string => {
   const trimmed = url.trim().replace(/\/+$/, '');
-  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+  if (trimmed.endsWith('/api/v1')) {
+    return trimmed;
+  }
+  return trimmed.endsWith('/api') ? `${trimmed}/v1` : `${trimmed}/api/v1`;
 };
 
 export const resolveApiOptions = (args: { url?: string; token?: string }): ApiOptions => {
-  const url = args.url || process.env.GORULES_URL;
-  const token = args.token || process.env.GORULES_TOKEN;
+  const url = args.url || process.env.DONKA_URL;
+  const token = args.token || process.env.DONKA_TOKEN;
 
   if (!url) {
-    throw new CliError('Missing server URL. Pass --url or set GORULES_URL.', 2);
+    throw new CliError('Missing Studio URL. Pass --url or set DONKA_URL.', 2);
   }
   if (!token) {
-    throw new CliError('Missing access token. Pass --token or set GORULES_TOKEN.', 2);
+    throw new CliError('Missing CI token. Pass --token or set DONKA_TOKEN.', 2);
   }
 
   return { url: normalizeApiUrl(url), token };
@@ -76,13 +80,13 @@ const describeHttpError = async (response: Response, context: string): Promise<C
   const detail = body.slice(0, 500);
 
   if (response.status === 401) {
-    return new CliError(`${context}: the access token was rejected (401). Check GORULES_TOKEN.`);
+    return new CliError(`${context}: the CI token was rejected (401): it is unknown or revoked. Check DONKA_TOKEN.`);
   }
   if (response.status === 403) {
-    return new CliError(`${context}: the access token is not permitted to do this (403). Check its project scope.`);
+    return new CliError(`${context}: the CI token is not permitted to do this (403).`);
   }
   if (response.status === 404) {
-    return new CliError(`${context}: not found (404). Check the server URL and the project reference.`);
+    return new CliError(`${context}: not found (404). Check the Studio URL and the project.`);
   }
 
   return new CliError(`${context}: HTTP ${response.status}${detail ? ` ${detail}` : ''}`);
@@ -135,10 +139,9 @@ export const sync = async (options: ApiOptions, deployments: SyncDeploymentReque
 };
 
 /**
- * The sync response returns either an absolute signed CDN URL, which must be
+ * The sync response returns either an absolute signed URL, which must be
  * fetched without the token, or a path relative to the API base, which must be
- * fetched with it. Self-hosted installs without CDN configuration always take
- * the second form.
+ * fetched with it. Studio answers with the second form.
  */
 export const downloadArtifact = async (options: ApiOptions, artifact: SyncArtifact): Promise<Buffer> => {
   const isRelative = artifact.url.startsWith('/');
