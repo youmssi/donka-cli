@@ -79,5 +79,7 @@ src/mcp/               MCP server, WebSocket bridge to the editor, logging
 actions/pull/          GitHub Action
 templates/             GitLab CI and Azure Pipelines templates
 test/                  CLI and template tests against a fake Studio (node:test)
+docs/                  reference pages: pull, CI templates, MCP bridge
+.github/assets/        README banner
 DONKA.md               what this fork changes and why
 ```
