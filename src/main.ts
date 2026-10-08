@@ -7,9 +7,9 @@ import { version as VERSION } from '../package.json';
 
 const main = defineCommand({
   meta: {
-    name: 'gorules',
+    name: 'donka',
     version: VERSION,
-    description: 'GoRules CLI',
+    description: 'Donka CLI',
   },
   subCommands: {
     mcp,

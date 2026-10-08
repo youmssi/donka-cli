@@ -105,7 +105,7 @@ export interface ExtractResult {
  * through it.
  */
 export const atomicWriteFile = async (file: string, content: Buffer): Promise<void> => {
-  const tmp = join(dirname(file), `.${randomBytes(6).toString('hex')}.gorules-tmp`);
+  const tmp = join(dirname(file), `.${randomBytes(6).toString('hex')}.donka-tmp`);
   try {
     await writeFile(tmp, content);
     await rename(tmp, file);

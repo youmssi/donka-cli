@@ -27,7 +27,7 @@ export async function startBridge(opts: BridgeOptions) {
 
   const callTool = (name: string, input: unknown): Promise<unknown> => {
     if (!manifest) {
-      throw new Error('Browser not connected. Open GoRules and click "Connect MCP".');
+      throw new Error('Browser not connected. Open Donka Studio and click "Connect MCP".');
     }
 
     const requestId = crypto.randomUUID();
@@ -44,7 +44,7 @@ export async function startBridge(opts: BridgeOptions) {
 
   const callEvaluate = (request: EvaluateRequest): Promise<EvaluateResponse> => {
     if (!manifest) {
-      throw new Error('Browser not connected. Open GoRules and click "Connect MCP".');
+      throw new Error('Browser not connected. Open Donka Studio and click "Connect MCP".');
     }
 
     const requestId = crypto.randomUUID();
@@ -61,7 +61,7 @@ export async function startBridge(opts: BridgeOptions) {
 
   const callGetFile = (request: GetFileRequest): Promise<GetFileResponse> => {
     if (!manifest) {
-      throw new Error('Browser not connected. Open GoRules and click "Connect MCP".');
+      throw new Error('Browser not connected. Open Donka Studio and click "Connect MCP".');
     }
 
     const requestId = crypto.randomUUID();

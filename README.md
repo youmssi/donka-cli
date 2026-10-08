@@ -1,110 +1,131 @@
-# @gorules/cli
+# Donka CLI
 
-Command-line tool for [GoRules](https://gorules.io) — a business rules management system (BRMS) for decision tables, decision graphs, and expressions.
+Command-line tool for [Donka](https://github.com/youmssi/donka), decision management for credit
+and risk teams. `donka pull` brings a project's release artifact from Donka Studio into a CI/CD
+pipeline, which then publishes it wherever your Donka Runtime reads it from.
 
 ## Installation
 
+Each [GitHub release](https://github.com/youmssi/donka-cli/releases) carries the CLI as
+`donka-cli-X.Y.Z.tgz`. It needs Node.js 22 or later and has no runtime dependencies.
+
 ```bash
-npm install -g @gorules/cli
+VERSION=0.3.3 # x-release-please-version
+PACKAGE="https://github.com/youmssi/donka-cli/releases/download/v$VERSION/donka-cli-$VERSION.tgz"
+
+# Run it once, pinned to a version
+npx --yes --package "$PACKAGE" donka --help
+
+# Or install it
+npm install -g "$PACKAGE"
+donka --help
 ```
 
-Or run directly with npx (e.g. mcp start):
+Behind a firewall, copy the `.tgz` to an internal mirror and point `npx --package` (or the
+templates' `cli-package` setting) at it.
+
+## Pulling a release into a pipeline
+
+`donka pull` asks Studio's rules-sync API which release a target resolves to, downloads its
+artifact and checks it against the SHA-256 Studio published.
 
 ```bash
-npx @gorules/cli mcp start
-```
+export DONKA_URL=https://donka.bank.example
+export DONKA_TOKEN=...              # CI token from the project's Settings, read-only
 
-## Pulling rules into a pipeline
-
-`gorules pull` resolves a target in BRMS and downloads the matching rules artifact. It is the
-building block for shipping rules from BRMS into your own infrastructure: a CI job pulls the
-artifact and uploads it wherever your runtime reads it from.
-
-```bash
-export GORULES_URL=https://acme.us1.gorules.io
-export GORULES_TOKEN=...            # project access token, read scope is enough
-
-gorules pull --project pricing --target env:production --out ./dist
+donka pull --project credit-pme --target env:production --out ./dist
 aws s3 cp ./dist/ s3://my-bucket/rules/live/ --recursive
 ```
 
+A project owner issues the CI token in **Settings → CI tokens** in Studio. It reads one project
+only and can be revoked there at any time.
+
 ### Targets
 
-| Target              | Resolves to                                       |
-| ------------------- | ------------------------------------------------- |
-| `main` (default)    | latest commit on the default branch               |
-| `branch:<branchId>` | latest commit on that branch                      |
-| `commit:<commitId>` | that exact commit, pinned                         |
-| `release:<version>` | that release, by semantic version or id           |
-| `env:<key>`         | whichever release is deployed to that environment |
+| Target                      | Resolves to                                                         |
+| --------------------------- | ------------------------------------------------------------------- |
+| `main` (default)            | the project's newest release                                        |
+| `commit:<release id>`       | that release, by its id                                             |
+| `release:<version>`         | that release, by its semantic version (`1.4.0` or `v1.4.0`)         |
+| `env:<staging\|production>` | what is live on that environment, its Runtime token hashes included |
+
+Donka has releases, not branches: `branch:` targets are refused.
+
+A release pulled outside an environment (`main`, `commit:`, `release:`) lists no Runtime token,
+so a Runtime given it refuses every request; it is for pipelines that test or embed the rules.
+Pull `env:` to deploy what a Runtime serves.
 
 ### Options
 
-| Flag            | Env               | Description                                                                                       |
-| --------------- | ----------------- | ------------------------------------------------------------------------------------------------- |
-| `-p, --project` | `GORULES_PROJECT` | Project key or id                                                                                 |
-| `-t, --target`  | `GORULES_TARGET`  | Target to resolve (default `main`)                                                                |
-| `-o, --out`     |                   | Output directory (default `.`)                                                                    |
-| `--unpack`      |                   | Extract the archive instead of writing it                                                         |
-| `--delete`      |                   | With `--unpack`: delete files not in the artifact so the directory mirrors the target exactly     |
-| `--name`        |                   | Output file name (zip) or sub-directory name (dir); defaults to the project key with no extension |
-| `--current`     |                   | Release or commit id you already hold; exits `3` when unchanged                                   |
-| `-u, --url`     | `GORULES_URL`     | BRMS URL                                                                                          |
-| `--token`       | `GORULES_TOKEN`   | Access token                                                                                      |
-| `--json`        |                   | Print the result as JSON on stdout                                                                |
+| Flag            | Env             | Description                                                                                       |
+| --------------- | --------------- | ------------------------------------------------------------------------------------------------- |
+| `-p, --project` | `DONKA_PROJECT` | Project key or id                                                                                 |
+| `-t, --target`  | `DONKA_TARGET`  | Target to resolve (default `main`)                                                                |
+| `-o, --out`     |                 | Output directory (default `.`)                                                                    |
+| `--unpack`      |                 | Extract the archive instead of writing it                                                         |
+| `--delete`      |                 | With `--unpack`: delete files not in the artifact so the directory mirrors the target exactly     |
+| `--name`        |                 | Output file name (zip) or sub-directory name (dir); defaults to the project key with no extension |
+| `--current`     |                 | The `commit` id from a previous pull; exits `3` when unchanged                                    |
+| `-u, --url`     | `DONKA_URL`     | Studio URL (`https://studio`, `…/api` and `…/api/v1` all work)                                    |
+| `--token`       | `DONKA_TOKEN`   | CI token                                                                                          |
+| `--json`        |                 | Print the result as JSON on stdout                                                                |
+
+`--current` takes the `commit` field of a previous `--json` result: the release id for `main`,
+`commit:` and `release:`, the deployment id for `env:`. A deployment id changes when a release is
+deployed or the environment's Runtime tokens change, so a pipeline republishes in both cases.
 
 ### Naming the output
 
-The default writes `<project-key>` with **no** `.zip` suffix, because the agent's S3, GCS and Azure
-Blob providers use the object name verbatim as the project key: upload `pricing.zip` and the agent
-serves a project literally called `pricing.zip`.
+The default writes `<project-key>` with **no** `.zip` suffix, because the Runtime's S3, GCS and
+Azure Blob providers use the object name verbatim as the project key: upload `credit-pme.zip` and
+the Runtime serves a project literally called `credit-pme.zip`.
 
-The agent's local `zip` provider is the opposite -- it reads `<root>/<project>.zip` and strips the
-suffix itself -- so that destination needs it back:
+The Runtime's local `zip` provider is the opposite -- it reads `<root>/<project>.zip` and strips
+the suffix itself -- so that destination needs it back:
 
 ```bash
-gorules pull --project pricing --name pricing.zip --out ./rules
+donka pull --project credit-pme --name credit-pme.zip --out ./rules
 ```
 
 With `--unpack`, `--name` is the sub-directory to extract into (default: the project key, which is
-the layout the agent's `filesystem` provider expects). Pass `--name .` to extract straight into
+the layout the Runtime's `filesystem` provider expects). Pass `--name .` to extract straight into
 `--out`, which is what you want when baking rules into a container image.
 
 Extraction behaves like `aws s3 sync`: byte-identical files are left untouched, changed files are
 written atomically (temp file + rename, so a concurrent reader never sees a partial write), and
 files the artifact does not carry are preserved. Add `--delete` for `s3 sync --delete` semantics:
-the directory mirrors the target exactly, so rules deleted in BRMS are deleted on disk too. As a
-guard against wiping a directory it does not own, `--delete` refuses a non-empty destination that
-has no `.config/project.json` from a previous pull, and deletions only run after every new file has
-been written.
+the directory mirrors the target exactly, so decisions deleted in Studio are deleted on disk too.
+As a guard against wiping a directory it does not own, `--delete` refuses a non-empty destination
+that has no `.config/project.json` from a previous pull, and deletions only run after every new
+file has been written.
 
 ### Examples
 
-Object storage that the agent watches -- one archive per project, no extension:
+Object storage that the Runtime watches -- one archive per project, no extension:
 
 ```bash
-gorules pull --project pricing --target env:production --out ./dist
+donka pull --project credit-pme --target env:production --out ./dist
 aws s3 cp ./dist/ s3://my-bucket/rules/live/ --recursive
 ```
 
-A volume the agent reads with its `filesystem` provider -- unpacked, one directory per project:
+A volume the Runtime reads with its `filesystem` provider -- unpacked, one directory per project:
 
 ```bash
-gorules pull --project pricing --target env:production --out /srv/rules --unpack
-# /srv/rules/pricing/...
+donka pull --project credit-pme --target env:production --out /srv/rules --unpack
+# /srv/rules/credit-pme/...
 ```
 
-Baked into a container image, pinned to an exact release so the build is reproducible:
+Baked into a test image, pinned to an exact release so the build is reproducible:
 
 ```bash
-gorules pull --project pricing --target release:1.4.2 --out ./rules --unpack --name .
+donka pull --project credit-pme --target release:1.4.2 --out ./rules --unpack --name .
 # ./rules/*.json + ./rules/.config/project.json, ready for COPY
 ```
 
 Scheduled job that does nothing when production has not moved:
 
 ```bash
-gorules pull --project pricing --target env:production --current "$LAST_RELEASE_ID" --out ./dist
+donka pull --project credit-pme --target env:production --current "$LAST_COMMIT" --out ./dist
 case $? in
   0) aws s3 cp ./dist/ s3://my-bucket/rules/live/ --recursive ;;
   3) echo "unchanged" ;;
@@ -114,77 +135,67 @@ esac
 
 ### Exit codes
 
-| Code | Meaning                                              |
-| ---- | ---------------------------------------------------- |
-| `0`  | Artifact downloaded                                  |
-| `1`  | Error                                                |
-| `2`  | Usage error (missing or invalid arguments)           |
-| `3`  | Nothing to do (`--current` matched what is deployed) |
-| `4`  | No release is deployed to the target                 |
+| Code | Meaning                                                                |
+| ---- | ---------------------------------------------------------------------- |
+| `0`  | Artifact downloaded                                                    |
+| `1`  | Error (refused token, project out of reach, unknown target or release) |
+| `2`  | Usage error (missing or invalid arguments)                             |
+| `3`  | Nothing to do (`--current` matched what the target resolves to)        |
+| `4`  | No release yet, or nothing live on the environment                     |
 
-Pin the version in a pipeline rather than tracking `latest`:
-
-```bash
-npx @gorules/cli@0.3.3 pull --project pricing --target env:production # x-release-please-version
-```
+The token is never printed, in errors included.
 
 ## GitHub Actions
 
-Composite actions live under `actions/`, in this repository, so the tag you pin is the CLI version
-you get.
+The composite action lives under `actions/` in this repository, so the tag you pin is the
+template you get; `cli-version` pins the CLI it runs.
 
 ```yaml
-on:
-  workflow_dispatch:
-    inputs:
-      payload:
-        description: Set by BRMS when a webhook triggers the run; the action picks it up automatically
-        required: false
-        type: string
-
 jobs:
   rules:
     runs-on: ubuntu-latest
     steps:
-      - uses: gorules/cli/actions/pull@cli-v0.3.3 # x-release-please-version
+      - uses: youmssi/donka-cli/actions/pull@v0.3.3 # x-release-please-version
         id: rules
         with:
-          url: https://acme.us1.gorules.io
-          token: ${{ secrets.GORULES_TOKEN }}
-          # project and target normally arrive in the BRMS payload; set them
-          # only for runs that have none (manual without payload, schedules)
+          url: https://donka.bank.example
+          token: ${{ secrets.DONKA_TOKEN }}
+          project: credit-pme
+          target: env:production
           out: ./dist
 
       - name: Deploy
+        if: steps.rules.outputs.changed == 'true'
         env:
           PROJECT: ${{ steps.rules.outputs.project }}
         run: aws s3 cp "./dist/$PROJECT" "s3://my-bucket/rules/$PROJECT"
 ```
 
-| Input         | Required | Description                                                                      |
-| ------------- | -------- | -------------------------------------------------------------------------------- |
-| `url`         | yes      | BRMS URL                                                                         |
-| `token`       | yes      | Access token; pass a secret                                                      |
-| `project`     | yes\*    | Project key or id; optional when `payload` is set                                |
-| `target`      |          | Target to resolve (default `main`)                                               |
-| `out`         |          | Output directory (default `.`)                                                   |
-| `name`        |          | Output file or sub-directory name                                                |
-| `unpack`      |          | `true` to extract the archive                                                    |
-| `delete`      |          | With `unpack`, mirror the target exactly (delete stale files)                    |
-| `current`     |          | Release or commit id already held                                                |
-| `payload`     |          | BRMS event payload; auto-detected from `workflow_dispatch`, set only to override |
-| `cli-version` |          | Version of `@gorules/cli` to run                                                 |
+| Input         | Required | Description                                                     |
+| ------------- | -------- | --------------------------------------------------------------- |
+| `url`         | yes      | Studio URL                                                      |
+| `token`       | yes      | CI token; pass a secret                                         |
+| `project`     | yes      | Project key or id                                               |
+| `target`      |          | Target to resolve (default `main`)                              |
+| `out`         |          | Output directory (default `.`)                                  |
+| `name`        |          | Output file or sub-directory name                               |
+| `unpack`      |          | `true` to extract the archive                                   |
+| `delete`      |          | With `unpack`, mirror the target exactly (delete stale files)   |
+| `current`     |          | The `commit` output of a previous run                           |
+| `cli-version` |          | Version of the CLI to run, from its GitHub release              |
+| `cli-package` |          | Run this package instead, e.g. the `.tgz` on an internal mirror |
 
 | Output                           | Description                                                     |
 | -------------------------------- | --------------------------------------------------------------- |
-| `project` / `target`             | What was pulled, payload-aware                                  |
+| `project` / `target`             | What was pulled                                                 |
 | `changed`                        | `false` when `current` still matched, so nothing was downloaded |
 | `release` / `version` / `commit` | What the target resolved to                                     |
 | `sha256`                         | Checksum of the downloaded artifact                             |
 | `files`                          | JSON array of paths written                                     |
 
-The token is passed to the CLI as an environment variable rather than an argument, and masked in the
-log. `changed` exists so a scheduled workflow can skip the upload when production has not moved.
+The token is passed to the CLI as an environment variable rather than an argument, and masked in
+the log. `changed` exists so a scheduled workflow can skip the upload when production has not
+moved.
 
 ## GitLab CI
 
@@ -192,44 +203,46 @@ log. `changed` exists so a scheduled workflow can skip the upload when productio
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.3.3/templates/gitlab-ci-pull.yml' # x-release-please-version
+  - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.3.3/templates/gitlab-ci-pull.yml' # x-release-please-version
 
 pull:rules:
-  extends: .gorules-pull
-  # project and target normally arrive in the BRMS payload (GRL_PAYLOAD);
-  # set GORULES_PROJECT / GORULES_TARGET only for runs that have none
+  extends: .donka-pull
+  variables:
+    DONKA_PROJECT: credit-pme
+    DONKA_TARGET: env:production
 
 publish:rules:
   needs: ['pull:rules']
   script:
     # dotenv variables are not visible in rules: (evaluated before jobs run) -
-    # gate in script when using scheduled pulls with GORULES_CURRENT
+    # gate in script when using scheduled pulls with DONKA_CURRENT
     - aws s3 cp "dist/$RULES_PROJECT" "s3://my-bucket/rules/$RULES_PROJECT"
 ```
 
-`GORULES_URL` and `GORULES_TOKEN` are CI/CD variables; mask and protect the token. GitLab puts them
-in the environment automatically, so nothing else is needed to wire them up. Optional job variables:
-`GORULES_OUT` (default `dist`), `GORULES_NAME`, `GORULES_CURRENT`, `GORULES_UNPACK` and
-`GORULES_DELETE` (both `'false'` by default), and `GORULES_CLI_VERSION`.
+`DONKA_URL` and `DONKA_TOKEN` are CI/CD variables; mask and protect the token. GitLab puts them in
+the environment automatically, so nothing else is needed to wire them up. Optional job variables:
+`DONKA_TARGET` (default `main`), `DONKA_OUT` (default `dist`), `DONKA_NAME`, `DONKA_CURRENT`,
+`DONKA_UNPACK` and `DONKA_DELETE` (both `'false'` by default), `DONKA_CLI_VERSION` and
+`DONKA_CLI_PACKAGE`.
 
 The job publishes `RULES_CHANGED`, `RULES_PROJECT`, `RULES_TARGET`, `RULES_VERSION`,
-`RULES_RELEASE` and `RULES_SHA256` as a dotenv report, so later jobs read them as ordinary
-variables — a deploy job can route on the target (e.g. per-environment buckets) without parsing
-anything.
+`RULES_RELEASE`, `RULES_COMMIT` and `RULES_SHA256` as a dotenv report, so later jobs read them as
+ordinary variables — a deploy job can route on the target (e.g. per-environment buckets) without
+parsing anything.
 
 ## Azure Pipelines
 
 `templates/azure-pipelines-pull.yml` is a steps template: it pulls the artifact and sets result
 variables (`rulesChanged`, `rulesProject`, `rulesTarget`, `rulesVersion`, `rulesRelease`,
-`rulesSha256`), and you append your own publish step in the same job:
+`rulesCommit`, `rulesSha256`), and you append your own publish step in the same job:
 
 ```yaml
 resources:
   repositories:
-    - repository: gorules
+    - repository: donka
       type: github
-      name: gorules/cli
-      ref: refs/tags/cli-v0.3.3 # x-release-please-version
+      name: youmssi/donka-cli
+      ref: refs/tags/v0.3.3 # x-release-please-version
       endpoint: <your GitHub service connection>
 
 jobs:
@@ -237,51 +250,35 @@ jobs:
     pool:
       vmImage: ubuntu-latest
     steps:
-      - template: templates/azure-pipelines-pull.yml@gorules
+      - template: templates/azure-pipelines-pull.yml@donka
         parameters:
-          url: https://acme.us1.gorules.io
-          # project and target normally arrive in the BRMS payload (GRL_PAYLOAD)
+          url: https://donka.bank.example
+          project: credit-pme
+          target: env:production
 
       - script: aws s3 cp "$(Build.ArtifactStagingDirectory)/rules/$(rulesProject)" "s3://my-bucket/rules/$(rulesProject)"
         displayName: Deploy
 ```
 
-`GORULES_TOKEN` must exist as a secret pipeline variable or in a linked variable group. Azure
-DevOps does not map secret variables into the environment automatically, which the template handles
-by declaring it explicitly under `env:`.
-
-The job sets `rulesChanged` and `rulesVersion` as pipeline variables for later stages to read.
-
-## Triggered by BRMS
-
-All three templates read `GRL_PAYLOAD` when it is present, which is what BRMS sends when a webhook
-triggers the pipeline. The project and target then come from the event rather than from static
-configuration, so one pipeline handles every project and environment:
-
-| System          | How the payload arrives                 |
-| --------------- | --------------------------------------- |
-| GitHub Actions  | `inputs.payload` on `workflow_dispatch` |
-| GitLab CI       | `GRL_PAYLOAD` pipeline variable         |
-| Azure Pipelines | `GRL_PAYLOAD` run variable              |
-
-Without it, the configured `GORULES_PROJECT` and `GORULES_TARGET` are used, so the same file also
-works for a manual or scheduled run.
+`DONKA_TOKEN` must exist as a secret pipeline variable or in a linked variable group. Azure
+DevOps does not map secret variables into the environment automatically, which the template
+handles by declaring it explicitly under `env:`. Optional parameters: `out`, `name`, `unpack`,
+`delete`, `current`, `cliVersion` and `cliPackage`.
 
 ## MCP Bridge
 
-2
-The CLI includes an MCP (Model Context Protocol) bridge that connects AI tools like Claude, Cursor, and Windsurf to the GoRules decision graph editor.
-
-### Quick Start
+The CLI includes an MCP (Model Context Protocol) bridge that connects AI tools to the decision
+editor. Studio's editor does not connect to it yet (planned, see Donka's roadmap); the bridge's
+REST endpoints work on their own.
 
 ```bash
-gorules mcp start
+donka mcp start
 ```
 
 This starts a local server on `localhost:41919` that:
 
 - Exposes an **MCP endpoint** (`/mcp`) for AI tool integration
-- Connects to the GoRules editor via **WebSocket**
+- Connects to the editor via **WebSocket**
 - Provides **REST endpoints** for evaluating decisions and fetching files
 
 ### Options
@@ -290,18 +287,10 @@ This starts a local server on `localhost:41919` that:
 | ------------ | --------------------- | ----------- |
 | `-p, --port` | Server port           | `41919`     |
 | `-h, --host` | Server host           | `localhost` |
-| `-u, --url`  | GoRules server URL    | —           |
+| `-u, --url`  | Donka Studio URL      | —           |
 | `--open`     | Open browser on start | `false`     |
 
-### Connecting
-
-1. Run `gorules mcp start`
-2. Open the GoRules editor and click **Connect MCP**
-3. Enter the connection token displayed in your terminal
-
 ### REST Endpoints
-
-The bridge exposes REST endpoints for local development:
 
 **Evaluate a decision graph:**
 
@@ -317,28 +306,13 @@ curl -X POST http://localhost:41919/evaluate/my-decision \
 curl http://localhost:41919/file/my-decision
 ```
 
-These endpoints can also be used as a loader for [ZenEngine](https://github.com/gorules/zen):
-
-```js
-const engine = new ZenEngine({
-  loader: async (key) => {
-    const res = await fetch(`http://localhost:41919/file/${key}`);
-    return res.json();
-  },
-});
-```
-
 ### AI Tool Configuration
-
-Add the MCP server to your AI tool's configuration:
-
-**Claude Desktop / Claude Code:**
 
 ```json
 {
   "mcpServers": {
-    "gorules": {
-      "command": "gorules",
+    "donka": {
+      "command": "donka",
       "args": ["mcp", "start"]
     }
   }
@@ -351,10 +325,12 @@ Add the MCP server to your AI tool's configuration:
 pnpm install
 pnpm dev          # Build and run
 pnpm build        # Production build
+pnpm test         # Build, then test the CLI and the CI templates against a fake Studio
 pnpm lint         # Lint
 pnpm format:fix   # Format
 ```
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Donka CLI is a fork of [gorules/cli](https://github.com/gorules/cli); see
+[`DONKA.md`](DONKA.md).

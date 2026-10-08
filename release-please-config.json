@@ -44,6 +44,7 @@
     ".": {
       "package-name": "donka-cli",
       "release-type": "node",
+      "include-component-in-tag": false,
       "extra-files": [
         "actions/pull/action.yml",
         "templates/gitlab-ci-pull.yml",

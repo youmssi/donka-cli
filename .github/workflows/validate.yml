@@ -14,7 +14,7 @@ jobs:
   codequality:
     name: 'Code quality'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,3 +41,66 @@ jobs:
 
       - name: 'Build'
         run: pnpm build
+
+      - name: 'Test'
+        run: pnpm test
+
+  action:
+    name: 'GitHub action'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: true
+
+      - name: Pack the CLI and start a fake Studio
+        id: pack
+        run: |
+          pnpm build
+          npm pack --pack-destination "$RUNNER_TEMP"
+          echo "package=$(ls "$RUNNER_TEMP"/donka-cli-*.tgz)" >> "$GITHUB_OUTPUT"
+          node test/serve.ts 4949 &
+          sleep 1
+
+      - uses: ./actions/pull
+        id: pull
+        with:
+          url: http://127.0.0.1:4949
+          token: dnk_ci_test-secret-value
+          project: credit-pme
+          target: env:staging
+          out: ${{ runner.temp }}/rules
+          cli-package: ${{ steps.pack.outputs.package }}
+
+      - uses: ./actions/pull
+        id: unchanged
+        with:
+          url: http://127.0.0.1:4949
+          token: dnk_ci_test-secret-value
+          project: credit-pme
+          target: env:staging
+          current: ${{ steps.pull.outputs.commit }}
+          out: ${{ runner.temp }}/rules
+          cli-package: ${{ steps.pack.outputs.package }}
+
+      - name: Check the outputs
+        env:
+          CHANGED: ${{ steps.pull.outputs.changed }}
+          VERSION: ${{ steps.pull.outputs.version }}
+          UNCHANGED: ${{ steps.unchanged.outputs.changed }}
+        run: |
+          test "$CHANGED" = true
+          test "$VERSION" = 1.0.0
+          test "$UNCHANGED" = false
+          test -f "$RUNNER_TEMP/rules/credit-pme"

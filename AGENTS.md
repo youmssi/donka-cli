@@ -18,7 +18,7 @@ contributors read it too. `CLAUDE.md` imports it and adds what is specific to th
   repository is the **Donka CLI**: it pulls release artifacts from Donka Studio into CI/CD
   pipelines and bridges the Studio editor to AI tools over MCP.
 - **Origin:** fork of [gorules/cli](https://github.com/gorules/cli) (MIT). The `upstream`
-  remote points at it. See `DONKA.md` for what Donka changes (rebrand in DNK-21).
+  remote points at it. See `DONKA.md` for what Donka changes.
 - **Contract:** Studio's `rules-sync` API (DNK-20). Studio merges first when it changes.
 - **Stack:** TypeScript, Node 22+, citty, @clack/prompts, rolldown, pnpm. Uses `import type` for
   type-only imports.
@@ -51,6 +51,7 @@ pnpm lint
 pnpm format
 pnpm typecheck
 pnpm build
+pnpm test
 ```
 
 CI (`.github/workflows/validate.yml`) runs the same commands and blocks the merge.
@@ -64,8 +65,8 @@ progress; ready when checks are green.
 
 `develop` → `main` through a promotion PR merged with a merge commit; release-please's release PR
 on `main` then sets the version and `CHANGELOG.md`, tags it, and opens a back-merge PR into
-`develop` (merge commit). Nothing is published to npm: the upstream `@gorules/cli` publish job
-is removed, and DNK-21 decides how Donka CLI ships.
+`develop` (merge commit). The release workflow attaches `donka-cli-X.Y.Z.tgz` (`npm pack`) to the
+GitHub release; that is how Donka CLI ships. Nothing is published to npm.
 
 ## 8. Repository map
 
@@ -77,5 +78,6 @@ src/api/               HTTP client for rules-sync, artifact download, zip extrac
 src/mcp/               MCP server, WebSocket bridge to the editor, logging
 actions/pull/          GitHub Action
 templates/             GitLab CI and Azure Pipelines templates
+test/                  CLI and template tests against a fake Studio (node:test)
 DONKA.md               what this fork changes and why
 ```

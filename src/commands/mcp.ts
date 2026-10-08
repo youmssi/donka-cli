@@ -21,7 +21,7 @@ const start = defineCommand({
     },
     url: {
       type: 'string',
-      description: 'GoRules server URL',
+      description: 'Donka Studio URL',
       alias: 'u',
     },
     open: {
@@ -43,7 +43,7 @@ const start = defineCommand({
 export const mcp = defineCommand({
   meta: {
     name: 'mcp',
-    description: 'MCP bridge for connecting AI tools to GoRules',
+    description: 'MCP bridge for connecting AI tools to the Donka editor',
   },
   subCommands: {
     start,
