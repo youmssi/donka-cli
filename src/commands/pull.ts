@@ -1,35 +1,10 @@
 import { defineCommand } from 'citty';
-import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import pc from 'picocolors';
-import { CliError, downloadArtifact, resolveApiOptions, sync, type SyncDeploymentResult } from '../api/client';
+import { CliError, resolveApiOptions } from '../api/client';
 import { atomicWriteFile, extractZipTo } from '../api/extract';
-
-/**
- * Exit codes are part of the contract: pipelines branch on them.
- *   0 downloaded   3 nothing to do   4 no release   1 error   2 usage
- */
-const EXIT_NO_CHANGE = 3;
-const EXIT_NO_RELEASE = 4;
-
-const describeFailure = (result: SyncDeploymentResult, project: string, target: string): CliError => {
-  switch (result.action) {
-    case 'no_access':
-      return new CliError(
-        `The CI token cannot reach project "${project}". Check the project key and that the token was issued in that project's settings.`,
-      );
-    case 'no_release':
-      return new CliError(
-        `Nothing to pull for "${target}" in project "${project}": no release yet, or nothing live in that environment.`,
-        EXIT_NO_RELEASE,
-      );
-    case 'error':
-      return new CliError(`Could not resolve "${target}" in project "${project}": ${result.code ?? 'unknown error'}`);
-    default:
-      return new CliError(`Unexpected response for "${target}" in project "${project}": ${result.action}`);
-  }
-};
+import { EXIT_NO_CHANGE, fetchArtifact } from '../api/release';
 
 export const pull = defineCommand({
   meta: {
@@ -91,18 +66,9 @@ export const pull = defineCommand({
       throw new CliError('--delete only applies when extracting. Add --unpack.', 2);
     }
 
-    // A `current` id is echoed back to the server, which answers no_change
-    // rather than re-serving an artifact the caller already holds.
-    const current = args.current ? { commitId: args.current, releaseId: args.current } : undefined;
+    const fetched = await fetchArtifact(options, project, target, args.current);
 
-    const response = await sync(options, [{ project, target, ...(current && { current }) }]);
-    const result = response.deployments[0];
-
-    if (!result) {
-      throw new CliError('The server returned no result for this deployment.');
-    }
-
-    if (result.action === 'no_change') {
+    if (fetched.action === 'no_change') {
       if (args.json) {
         process.stdout.write(JSON.stringify({ action: 'no_change', project, target }) + '\n');
       } else {
@@ -112,17 +78,7 @@ export const pull = defineCommand({
       return;
     }
 
-    if (result.action !== 'load' || !result.artifact) {
-      throw describeFailure(result, project, target);
-    }
-
-    const buffer = await downloadArtifact(options, result.artifact);
-    const digest = createHash('sha256').update(buffer).digest('hex');
-
-    // Verified only when the server supplied a digest; Studio always does.
-    if (result.artifact.sha256 && result.artifact.sha256.toLowerCase() !== digest) {
-      throw new CliError('Artifact checksum mismatch: the download does not match what the server published.');
-    }
+    const { result, buffer, digest, verified } = fetched;
 
     // Default to the project key with no extension: the agent's object
     // storage providers use the object name verbatim as the project key, so a
@@ -161,7 +117,7 @@ export const pull = defineCommand({
       commit: result.commit?.id,
       environment: result.environment?.key ?? undefined,
       sha256: digest,
-      verified: Boolean(result.artifact.sha256),
+      verified,
       files: written,
       ...(args.unpack && { updated }),
       ...(args.delete && { deleted }),

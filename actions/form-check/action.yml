@@ -1,0 +1,95 @@
+name: Donka Form Check
+description: Fail the workflow when a form no longer matches the input contract of the Donka decision it feeds
+branding:
+  icon: check-square
+  color: blue
+
+inputs:
+  url:
+    description: Donka Studio URL, e.g. https://donka.bank.example
+    required: true
+  token:
+    description: CI token from the project's settings. Pass a secret, never a literal
+    required: true
+  project:
+    description: Project key or id
+    required: true
+  target:
+    description: "'main' (newest release), 'commit:<release id>', 'release:<version>' or 'env:<staging|production>'"
+    required: false
+    default: main
+  decision:
+    description: Key of the decision the form feeds
+    required: true
+  form:
+    description: Path to the form definition, a JSON Schema (or an object holding one under "schema")
+    required: true
+  cli-version:
+    description: Version of the Donka CLI to run, from its GitHub release. Pin this in production
+    required: false
+    default: 0.3.3 # x-release-please-version
+  cli-package:
+    description: Run this package instead of the GitHub release, e.g. a copy of donka-cli-X.Y.Z.tgz on an internal mirror
+    required: false
+    default: ''
+
+outputs:
+  version:
+    description: Release version the target resolved to
+    value: ${{ steps.check.outputs.version }}
+  contract:
+    description: Path of the contract the form was checked against
+    value: ${{ steps.check.outputs.contract }}
+  differences:
+    description: JSON array of the differences found, empty when the form matches
+    value: ${{ steps.check.outputs.differences }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        # Credentials travel as environment, never as arguments: anything on
+        # the command line is visible to other processes and lands in traces.
+        DONKA_URL: ${{ inputs.url }}
+        DONKA_TOKEN: ${{ inputs.token }}
+        DONKA_PROJECT: ${{ inputs.project }}
+        DONKA_TARGET: ${{ inputs.target }}
+        INPUT_DECISION: ${{ inputs.decision }}
+        INPUT_FORM: ${{ inputs.form }}
+        CLI_VERSION: ${{ inputs['cli-version'] }}
+        CLI_PACKAGE: ${{ inputs['cli-package'] }}
+      run: |
+        set -euo pipefail
+        echo "::add-mask::$DONKA_TOKEN"
+
+        if [ -z "$DONKA_PROJECT" ] || [ -z "$INPUT_DECISION" ] || [ -z "$INPUT_FORM" ]; then
+          echo "The project, decision and form inputs are required." >&2
+          exit 2
+        fi
+        package="${CLI_PACKAGE:-https://github.com/youmssi/donka-cli/releases/download/v${CLI_VERSION}/donka-cli-${CLI_VERSION}.tgz}"
+
+        contracts="$RUNNER_TEMP/donka-contracts"
+        npx --yes --package "$package" donka form pull --decision "$INPUT_DECISION" --out "$contracts" --json \
+          > "$RUNNER_TEMP/donka-form-pull.json"
+        contract="$contracts/$INPUT_DECISION/input.schema.json"
+        echo "version=$(jq -r '.version // ""' "$RUNNER_TEMP/donka-form-pull.json")" >> "$GITHUB_OUTPUT"
+        echo "contract=$contract" >> "$GITHUB_OUTPUT"
+
+        result="$RUNNER_TEMP/donka-form-check.json"
+        set +e
+        npx --yes --package "$package" donka form check --contract "$contract" --form "$INPUT_FORM" --json > "$result"
+        code=$?
+        set -e
+
+        # Each difference becomes an annotation on the form file.
+        if jq -e '.differences' "$result" > /dev/null 2>&1; then
+          echo "differences=$(jq -c '.differences' "$result")" >> "$GITHUB_OUTPUT"
+          jq -r --arg file "$INPUT_FORM" \
+            '.differences[] | "::error file=\($file),title=Form does not match the contract::\(.field): \(.message)"' "$result"
+        fi
+        if [ "$code" -eq 0 ]; then
+          echo "The form matches the contract of $INPUT_DECISION."
+        fi
+        exit "$code"

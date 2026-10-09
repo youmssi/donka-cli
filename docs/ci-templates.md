@@ -1,7 +1,8 @@
 # CI templates
 
 Three ready-made integrations wrap [`donka pull`](pull.md). Each one pulls the artifact and
-hands you the result; publishing it is your next step.
+hands you the result; publishing it is your next step. Three more check a form against a
+decision's input contract: see [Form checks](#form-checks).
 
 ## GitHub Actions
 
@@ -122,3 +123,81 @@ jobs:
 DevOps does not map secret variables into the environment automatically, which the template
 handles by declaring it explicitly under `env:`. Optional parameters: `out`, `name`, `unpack`,
 `delete`, `current`, `cliVersion` and `cliPackage`.
+
+## Form checks
+
+Three more templates wrap [`donka form`](form.md) for the team that owns a form: each one pulls
+the input contract of one decision and runs `donka form check` against the form definition in
+your repository. The job fails, listing every difference, when the form no longer matches.
+
+### GitHub Actions
+
+```yaml
+jobs:
+  form:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: youmssi/donka-cli/actions/form-check@v0.3.3 # x-release-please-version
+        with:
+          url: https://donka.bank.example
+          token: ${{ secrets.DONKA_TOKEN }}
+          project: credit-pme
+          target: env:production
+          decision: retail/scorecard
+          form: forms/scorecard.json
+```
+
+| Input         | Required | Description                                                     |
+| ------------- | -------- | --------------------------------------------------------------- |
+| `url`         | yes      | Studio URL                                                      |
+| `token`       | yes      | CI token; pass a secret                                         |
+| `project`     | yes      | Project key or id                                               |
+| `decision`    | yes      | Key of the decision the form feeds                              |
+| `form`        | yes      | Path to the form definition                                     |
+| `target`      |          | Target to resolve (default `main`)                              |
+| `cli-version` |          | Version of the CLI to run, from its GitHub release              |
+| `cli-package` |          | Run this package instead, e.g. the `.tgz` on an internal mirror |
+
+| Output        | Description                                               |
+| ------------- | --------------------------------------------------------- |
+| `version`     | Release version the target resolved to                    |
+| `contract`    | Path of the contract the form was checked against         |
+| `differences` | JSON array of the differences, `[]` when the form matches |
+
+Each difference is also an error annotation on the form file.
+
+### GitLab CI
+
+```yaml
+include:
+  - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.3.3/templates/gitlab-ci-form-check.yml' # x-release-please-version
+
+check:form:
+  extends: .donka-form-check
+  variables:
+    DONKA_PROJECT: credit-pme
+    DONKA_TARGET: env:production
+    DONKA_DECISION: retail/scorecard
+    DONKA_FORM: forms/scorecard.json
+```
+
+`DONKA_URL` and `DONKA_TOKEN` are CI/CD variables, as for `.donka-pull`. Optional:
+`DONKA_TARGET` (default `main`), `DONKA_CLI_VERSION` and `DONKA_CLI_PACKAGE`.
+
+### Azure Pipelines
+
+```yaml
+steps:
+  - checkout: self
+  - template: templates/azure-pipelines-form-check.yml@donka
+    parameters:
+      url: https://donka.bank.example
+      project: credit-pme
+      target: env:production
+      decision: retail/scorecard
+      form: forms/scorecard.json
+```
+
+The `donka` repository resource and the `DONKA_TOKEN` secret variable are set up as for the pull
+template. Optional parameters: `target`, `cliVersion` and `cliPackage`.
