@@ -104,3 +104,46 @@ jobs:
           test "$VERSION" = 1.0.0
           test "$UNCHANGED" = false
           test -f "$RUNNER_TEMP/rules/credit-pme"
+
+      - name: Write a form from release 1.0.0's contract
+        run: |
+          node dist/main.js form pull --target release:1.0.0 --decision loan --out "$RUNNER_TEMP/contracts"
+          node dist/main.js form init --contract "$RUNNER_TEMP/contracts/loan/input.schema.json" --out "$RUNNER_TEMP/loan-form.json"
+        env:
+          DONKA_URL: http://127.0.0.1:4949
+          DONKA_TOKEN: dnk_ci_test-secret-value
+          DONKA_PROJECT: credit-pme
+
+      - uses: ./actions/form-check
+        id: matches
+        with:
+          url: http://127.0.0.1:4949
+          token: dnk_ci_test-secret-value
+          project: credit-pme
+          target: release:1.0.0
+          decision: loan
+          form: ${{ runner.temp }}/loan-form.json
+          cli-package: ${{ steps.pack.outputs.package }}
+
+      # 1.1.0 adds a required field the form lacks, so this check must fail.
+      - uses: ./actions/form-check
+        id: drifted
+        continue-on-error: true
+        with:
+          url: http://127.0.0.1:4949
+          token: dnk_ci_test-secret-value
+          project: credit-pme
+          target: main
+          decision: loan
+          form: ${{ runner.temp }}/loan-form.json
+          cli-package: ${{ steps.pack.outputs.package }}
+
+      - name: Check the form check outcomes
+        env:
+          MATCHES: ${{ steps.matches.outputs.differences }}
+          DRIFTED: ${{ steps.drifted.outcome }}
+          DIFFERENCES: ${{ steps.drifted.outputs.differences }}
+        run: |
+          test "$MATCHES" = '[]'
+          test "$DRIFTED" = failure
+          test "$(echo "$DIFFERENCES" | jq -r '.[0].field')" = loan.termMonths

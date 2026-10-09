@@ -5,10 +5,17 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { parse } from 'yaml';
-import { PROJECT, STAGING, TOKEN, spawnAsync, startFakeStudio, type FakeStudio } from './fake-studio.ts';
+import { PROJECT, STAGING, TOKEN, contract, spawnAsync, startFakeStudio, type FakeStudio } from './fake-studio.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const FILES = ['actions/pull/action.yml', 'templates/gitlab-ci-pull.yml', 'templates/azure-pipelines-pull.yml'];
+const FILES = [
+  'actions/pull/action.yml',
+  'actions/form-check/action.yml',
+  'templates/gitlab-ci-pull.yml',
+  'templates/gitlab-ci-form-check.yml',
+  'templates/azure-pipelines-pull.yml',
+  'templates/azure-pipelines-form-check.yml',
+];
 
 let studio: FakeStudio;
 let work: string;
@@ -48,6 +55,17 @@ const run = async (shell: string, script: string, env: Record<string, string>): 
     },
   });
   return { ...result, dir };
+};
+
+/**
+ * Form definitions for the `loan` decision: one written for release 1.0.0,
+ * which `main` (1.1.0) no longer matches, and one written for 1.1.0.
+ */
+const FORMS = { old: 'form-1.0.0.json', current: 'form-1.1.0.json' };
+const formPath = (name: string): string => {
+  const path = join(work, name);
+  writeFileSync(path, JSON.stringify(contract(name === FORMS.old ? 'r-1' : 'r-2')));
+  return path;
 };
 
 const keyValues = (text: string): Record<string, string> =>
@@ -214,6 +232,141 @@ describe('templates', () => {
 
     it('fails with the CLI’s exit code otherwise', async () => {
       assert.equal((await pull({ target: 'env:production' })).code, 4);
+    });
+  });
+  describe('GitHub form check action', () => {
+    interface Action {
+      inputs: Record<string, { default?: string }>;
+      runs: { steps: { run: string; env: Record<string, string> }[] };
+    }
+    const action = parse(readFileSync(join(ROOT, 'actions/form-check/action.yml'), 'utf-8')) as Action;
+    const [step] = action.runs.steps;
+    assert.ok(step);
+
+    const check = async (inputs: Record<string, string>) => {
+      const values: Record<string, string> = {
+        ...Object.fromEntries(Object.entries(action.inputs).map(([key, input]) => [key, input.default ?? ''])),
+        url: studio.url,
+        token: TOKEN,
+        project: PROJECT.key,
+        decision: 'loan',
+        'cli-package': cliPackage,
+        ...inputs,
+      };
+      const env = Object.fromEntries(
+        Object.entries(step.env).map(([key, expression]) => {
+          const name = /inputs(?:\.([\w]+)|\['([\w-]+)'\])/.exec(expression);
+          return [key, values[name?.[1] ?? name?.[2] ?? ''] ?? ''];
+        }),
+      );
+      const temp = mkdtempSync(join(work, 'runner-'));
+      const outputs = join(temp, 'outputs');
+      writeFileSync(outputs, '');
+      const result = await run('bash', step.run, { ...env, GITHUB_OUTPUT: outputs, RUNNER_TEMP: temp });
+      return { ...result, outputs: keyValues(readFileSync(outputs, 'utf-8')) };
+    };
+
+    it('passes when the form matches the target’s contract', async () => {
+      const result = await check({ target: 'release:1.0.0', form: formPath(FORMS.old) });
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(result.outputs.version, '1.0.0');
+      assert.equal(result.outputs.differences, '[]');
+      assert.match(result.outputs.contract ?? '', /loan\/input\.schema\.json$/);
+      assert.match(result.stdout, new RegExp(`::add-mask::${TOKEN}`));
+    });
+
+    it('fails with an annotation per difference when the contract moved on', async () => {
+      const form = formPath(FORMS.old);
+      const result = await check({ form });
+      assert.equal(result.code, 1);
+      assert.equal((JSON.parse(result.outputs.differences ?? '[]') as unknown[]).length, 1);
+      assert.ok(
+        result.stdout.includes(
+          `::error file=${form},title=Form does not match the contract::loan.termMonths: in the contract, not in the form`,
+        ),
+        result.stdout,
+      );
+    });
+
+    it('fails with the CLI’s exit code otherwise', async () => {
+      assert.equal((await check({ target: 'env:production', form: formPath(FORMS.current) })).code, 4);
+      assert.equal((await check({ form: '' })).code, 2);
+      assert.equal((await check({ decision: 'pricing', form: formPath(FORMS.current) })).code, 1);
+    });
+  });
+
+  describe('GitLab CI form check', () => {
+    const job = (
+      parse(readFileSync(join(ROOT, 'templates/gitlab-ci-form-check.yml'), 'utf-8')) as Record<string, unknown>
+    )['.donka-form-check'] as { variables: Record<string, string>; script: string[] };
+
+    const check = (variables: Record<string, string>) =>
+      run('sh', job.script.join('\n'), {
+        ...job.variables,
+        DONKA_URL: studio.url,
+        DONKA_TOKEN: TOKEN,
+        DONKA_PROJECT: PROJECT.key,
+        DONKA_DECISION: 'loan',
+        DONKA_CLI_PACKAGE: cliPackage,
+        ...variables,
+      });
+
+    it('passes when the form matches, fails listing the difference when it does not', async () => {
+      const pass = await check({ DONKA_FORM: formPath(FORMS.current) });
+      assert.equal(pass.code, 0, pass.stderr);
+      assert.match(pass.stderr, /The form matches the contract/);
+
+      const fail = await check({ DONKA_FORM: formPath(FORMS.old) });
+      assert.equal(fail.code, 1);
+      assert.match(fail.stderr, /loan\.termMonths\s+in the contract, not in the form/);
+    });
+
+    it('fails with the CLI’s exit code otherwise', async () => {
+      assert.equal((await check({ DONKA_TARGET: 'env:production', DONKA_FORM: formPath(FORMS.current) })).code, 4);
+      assert.equal((await check({ DONKA_FORM: '' })).code, 2);
+    });
+  });
+
+  describe('Azure Pipelines form check', () => {
+    interface Template {
+      parameters: { name: string; default?: unknown }[];
+      steps: { script?: string; env?: Record<string, string> }[];
+    }
+    const template = parse(readFileSync(join(ROOT, 'templates/azure-pipelines-form-check.yml'), 'utf-8')) as Template;
+    const step = template.steps.find((item) => item.script);
+    assert.ok(step?.script && step.env);
+
+    /** Azure expands template expressions and macros before the script runs. */
+    const check = async (parameters: Record<string, string>) => {
+      const values: Record<string, unknown> = {
+        ...Object.fromEntries(template.parameters.map((item) => [item.name, item.default ?? ''])),
+        url: studio.url,
+        project: PROJECT.key,
+        decision: 'loan',
+        cliPackage,
+        ...parameters,
+      };
+      const agentTemp = mkdtempSync(join(work, 'agent-'));
+      const expand = (text: string) =>
+        text
+          .replace(/\$\{\{ parameters\.(\w+) \}\}/g, (_, name: string) => String(values[name]))
+          .replace('$(Agent.TempDirectory)', agentTemp)
+          .replace('$(DONKA_TOKEN)', TOKEN);
+      const env = Object.fromEntries(Object.entries(step.env ?? {}).map(([key, value]) => [key, expand(value)]));
+      return run('bash', expand(step.script ?? ''), env);
+    };
+
+    it('passes when the form matches, fails listing the difference when it does not', async () => {
+      const pass = await check({ target: 'commit:r-1', form: formPath(FORMS.old) });
+      assert.equal(pass.code, 0, pass.stderr);
+
+      const fail = await check({ form: formPath(FORMS.old) });
+      assert.equal(fail.code, 1);
+      assert.match(fail.stderr, /loan\.termMonths\s+in the contract, not in the form/);
+    });
+
+    it('fails with the CLI’s exit code otherwise', async () => {
+      assert.equal((await check({ target: 'env:production', form: formPath(FORMS.current) })).code, 4);
     });
   });
 });

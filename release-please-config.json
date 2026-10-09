@@ -47,8 +47,11 @@
       "include-component-in-tag": false,
       "extra-files": [
         "actions/pull/action.yml",
+        "actions/form-check/action.yml",
         "templates/gitlab-ci-pull.yml",
+        "templates/gitlab-ci-form-check.yml",
         "templates/azure-pipelines-pull.yml",
+        "templates/azure-pipelines-form-check.yml",
         "README.md",
         "docs/ci-templates.md"
       ]

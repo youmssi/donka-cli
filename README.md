@@ -17,6 +17,7 @@
 
 <p align="center">
     <a href="docs/pull.md">donka pull</a> ·
+    <a href="docs/form.md">Forms</a> ·
     <a href="docs/ci-templates.md">CI templates</a> ·
     <a href="docs/mcp.md">MCP bridge</a> ·
     <a href="CONTRIBUTING.md">Contributing</a>
@@ -30,7 +31,9 @@ your systems.
 
 The Donka CLI is the bridge to your delivery pipeline: `donka pull` asks Studio which release a
 target resolves to, downloads its artifact, verifies its checksum, and leaves it ready for your
-pipeline to publish wherever your Runtime reads it from.
+pipeline to publish wherever your Runtime reads it from. `donka form` does the same for the
+teams that build the forms in front of a decision: it pulls the decision's input contract and
+fails a pipeline the day a form stops matching it.
 
 ## Features
 
@@ -39,6 +42,8 @@ pipeline to publish wherever your Runtime reads it from.
 - **Checksum verified**: the download must match the SHA-256 Studio published
 - **Scheduled-job friendly**: `--current` exits `3` when nothing changed, so you skip the upload
 - **Sync semantics**: `--unpack` writes only what changed, atomically; `--delete` mirrors exactly
+- **Forms kept in step**: `donka form check` lists every field a form is missing, renames,
+  types differently or requires on one side only; `donka form init` starts a form from the contract
 - **Ready-made CI**: a GitHub action and GitLab CI and Azure Pipelines templates, all tested
 - **Safe with secrets**: the CI token travels in the environment and is never printed
 - **No registry needed**: ships as a single package on each GitHub release, mirror-friendly
@@ -88,14 +93,16 @@ Every option, naming rule and example is in [docs/pull.md](docs/pull.md).
     target: env:production
 ```
 
-GitLab CI (`extends: .donka-pull`) and Azure Pipelines (a steps template) work the same way. Inputs,
-outputs and examples: [docs/ci-templates.md](docs/ci-templates.md).
+GitLab CI (`extends: .donka-pull`) and Azure Pipelines (a steps template) work the same way, and
+each has a form check beside it (`actions/form-check`, `.donka-form-check`). Inputs, outputs and
+examples: [docs/ci-templates.md](docs/ci-templates.md).
 
 ## Documentation
 
 | Page                                                                               | What it covers                                                |
 | ---------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | [docs/pull.md](docs/pull.md)                                                       | `donka pull`: targets, options, output naming, sync, examples |
+| [docs/form.md](docs/form.md)                                                       | `donka form`: pull contracts, check a form, start one         |
 | [docs/ci-templates.md](docs/ci-templates.md)                                       | GitHub action, GitLab CI and Azure Pipelines templates        |
 | [docs/mcp.md](docs/mcp.md)                                                         | The MCP bridge for AI tools                                   |
 | [rules-sync API](https://github.com/youmssi/donka/blob/develop/docs/rules-sync.md) | The Studio API the CLI speaks                                 |

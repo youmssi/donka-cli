@@ -56,10 +56,51 @@ export const zip = (files: Record<string, string>): Buffer => {
   return Buffer.concat([...locals, directory, end]);
 };
 
+/**
+ * The input contract of the `loan` decision in each release (DNK-37): 1.1.0
+ * adds a required term, so a form written for 1.0.0 no longer matches it.
+ */
+export const contract = (release: string): object => ({
+  $schema: 'http://json-schema.org/draft-07/schema#',
+  type: 'object',
+  required: ['applicant', 'loan'],
+  properties: {
+    applicant: {
+      type: 'object',
+      required: ['age'],
+      properties: {
+        age: { type: 'integer', minimum: 18, 'x-donka': { label: { en: 'Age', fr: 'Âge' }, order: 2 } },
+        nationalId: { type: 'string', 'x-donka': { label: { en: 'National ID', fr: 'CNI' }, pii: true, order: 1 } },
+      },
+    },
+    loan: {
+      type: 'object',
+      required: release === 'r-1' ? ['amount'] : ['amount', 'termMonths'],
+      properties: {
+        amount: {
+          type: 'number',
+          minimum: 1,
+          'x-donka': { label: { en: 'Amount', fr: 'Montant' }, help: { en: 'In XAF.', fr: 'En XAF.' } },
+        },
+        ...(release !== 'r-1' && { termMonths: { type: 'integer', minimum: 1 } }),
+      },
+    },
+  },
+});
+
+export const LIMITS_CONTRACT = {
+  type: 'object',
+  required: ['income'],
+  properties: { income: { type: 'number' } },
+};
+
 const artifact = (release: string, environment?: string): Buffer =>
   zip({
     'loan.json': JSON.stringify({ release }),
+    'retail/limits.json': JSON.stringify({ release }),
     '.config/project.json': JSON.stringify({ key: PROJECT.key, environment: environment ?? null }),
+    '.config/contracts/loan/input.schema.json': JSON.stringify(contract(release)),
+    '.config/contracts/retail/limits/input.schema.json': JSON.stringify(LIMITS_CONTRACT),
   });
 
 interface Deployment {

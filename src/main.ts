@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
+import { form } from './commands/form';
 import { mcp } from './commands/mcp';
 import { pull } from './commands/pull';
 import { CliError } from './api/client';
@@ -12,6 +13,7 @@ const main = defineCommand({
     description: 'Donka CLI',
   },
   subCommands: {
+    form,
     mcp,
     pull,
   },

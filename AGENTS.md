@@ -73,13 +73,15 @@ GitHub release; that is how Donka CLI ships. Nothing is published to npm.
 ```
 src/main.ts            entry point, command registration (citty)
 src/commands/pull.ts   pull a target's artifact (zip or unpacked)
+src/commands/form.ts   form pull | check | init: input contracts and form definitions
 src/commands/mcp.ts    start the MCP bridge
 src/api/               HTTP client for rules-sync, artifact download, zip extraction
+src/form/              contract vs form comparison, form generation
 src/mcp/               MCP server, WebSocket bridge to the editor, logging
-actions/pull/          GitHub Action
+actions/               GitHub Actions: pull, form-check
 templates/             GitLab CI and Azure Pipelines templates
 test/                  CLI and template tests against a fake Studio (node:test)
-docs/                  reference pages: pull, CI templates, MCP bridge
+docs/                  reference pages: pull, form, CI templates, MCP bridge
 .github/assets/        README banner
 DONKA.md               what this fork changes and why
 ```

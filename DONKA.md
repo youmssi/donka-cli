@@ -23,3 +23,10 @@ notice in `LICENSE` stay as they are.
 - `pnpm test` runs the built CLI and each template's script against a fake Studio; CI also runs
   the GitHub action itself.
 - The MCP bridge carries Donka's name. Studio's editor does not connect to it yet.
+
+## What Donka adds
+
+- `donka form` (DNK-38): `form pull` writes each decision's input contract from a target's
+  artifact (resolved and verified like `pull`); `form check` compares a form definition with a
+  contract and exits `1` on any difference; `form init` writes a starting form from a contract.
+  `actions/form-check` and the `*-form-check.yml` templates run the check in CI.
