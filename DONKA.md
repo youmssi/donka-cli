@@ -30,3 +30,14 @@ notice in `LICENSE` stay as they are.
   artifact (resolved and verified like `pull`); `form check` compares a form definition with a
   contract and exits `1` on any difference; `form init` writes a starting form from a contract.
   `actions/form-check` and the `*-form-check.yml` templates run the check in CI.
+
+## Planned
+
+- The CLI stays the developers' tool (`pull`, `form`, `mcp`). Server administration lives in
+  `donka-admin`, a separate binary in Studio's image, so a bank's server needs no Node.js
+  (DNK-74).
+- Release tarballs gain signatures and provenance, and the repository runs OpenSSF Scorecard
+  (DNK-64, DNK-73).
+- The MCP bridge connects to Studio's editor in Phase 3.
+
+Where each capability stands across Donka: Studio's `docs/capability-map.md`.
