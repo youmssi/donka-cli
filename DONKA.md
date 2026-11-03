@@ -20,8 +20,10 @@ notice in `LICENSE` stay as they are.
   pipeline.
 - Nothing is published to npm. Each GitHub release carries `donka-cli-X.Y.Z.tgz`, which the
   templates run with `npx --package`; `cli-package` points them at a mirror instead.
-- `pnpm test` runs the built CLI and each template's script against a fake Studio; CI also runs
-  the GitHub action itself.
+- `pnpm test` runs the built CLI and each template's script against a fake Studio, and exercises
+  the MCP bridge over real HTTP and WebSocket connections. CI also runs the GitHub action itself.
+- `pnpm test:coverage` enforces 70% executable TypeScript line coverage, including unimported files.
+  `pnpm audit:security` rejects high and critical dependency advisories.
 - The MCP bridge carries Donka's name. Studio's editor does not connect to it yet.
 
 ## What Donka adds

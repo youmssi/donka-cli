@@ -243,7 +243,11 @@ export const spawnAsync = (
   options: { cwd?: string; env: NodeJS.ProcessEnv },
 ): Promise<{ code: number | null; stdout: string; stderr: string }> =>
   new Promise((done, fail) => {
-    const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, {
+      ...options,
+      env: { NODE_V8_COVERAGE: process.env.NODE_V8_COVERAGE, ...options.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));

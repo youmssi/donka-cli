@@ -155,4 +155,13 @@ export async function startBridge(opts: BridgeOptions) {
     const { exec } = await import('node:child_process');
     exec(`open "${opts.serverUrl}"`);
   }
+
+  return {
+    httpServer: mcp.httpServer,
+    token,
+    close() {
+      ws.close();
+      mcp.httpServer.close();
+    },
+  };
 }

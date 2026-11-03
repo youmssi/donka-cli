@@ -3,7 +3,7 @@ import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  { ignores: ['dist/'] },
+  { ignores: ['dist/', 'coverage/'] },
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {
@@ -25,5 +25,9 @@ export default defineConfig(
         { allowForKnownSafeCalls: [{ from: 'package', package: 'node:test', name: ['describe', 'it'] }] },
       ],
     },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
   },
 );

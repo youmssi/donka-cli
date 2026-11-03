@@ -8,6 +8,7 @@ export default defineConfig({
     format: 'esm',
     cleanDir: true,
     minify: true,
+    sourcemap: true,
   },
   moduleTypes: {
     '.md': 'text',
