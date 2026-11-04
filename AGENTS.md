@@ -54,11 +54,15 @@ pnpm install --frozen-lockfile
 pnpm lint
 pnpm format
 pnpm typecheck
-pnpm build
-pnpm test
+pnpm test:coverage
+pnpm audit:security
 ```
 
 CI (`.github/workflows/validate.yml`) runs the same commands and blocks the merge.
+The coverage command builds and tests the CLI. It includes every executable `src/**/*.ts`,
+including unimported files, with a 70%
+line floor. Reports remap built subprocesses to TypeScript. Keep unit-test behavior assertions
+and live Studio/CLI integration checks; see Studio's `docs/engineering/quality-gates.md`.
 
 ## 6. Pull requests
 
