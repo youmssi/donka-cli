@@ -8,6 +8,7 @@ Please report security problems in the Donka CLI privately, through GitHub's
 pull request or discussion for a vulnerability.
 
 Include what you can of:
+
 - the version or commit affected;
 - the steps to reproduce, or a proof of concept;
 - what an attacker gains;
@@ -15,11 +16,11 @@ Include what you can of:
 
 ## What happens next
 
-| Step | Target |
-| --- | --- |
-| We acknowledge your report | 3 business days |
-| We confirm whether it is a vulnerability, and its severity | 10 business days |
-| A fix is released, depending on severity | Critical 7 days, high 30 days, medium 90 days |
+| Step                                                       | Target                                        |
+| ---------------------------------------------------------- | --------------------------------------------- |
+| We acknowledge your report                                 | 3 business days                               |
+| We confirm whether it is a vulnerability, and its severity | 10 business days                              |
+| A fix is released, depending on severity                   | Critical 7 days, high 30 days, medium 90 days |
 
 We keep you informed until the fix is released. We credit you in the advisory unless you prefer
 otherwise. We publish a GitHub security advisory once customers have had the fix.
@@ -33,6 +34,7 @@ GitHub release.
 
 Research done in good faith is welcome. Within this policy, we will not take legal action
 against you. Good faith means:
+
 - testing only installations you own or are allowed to test;
 - not accessing, keeping or changing other people's data beyond what you need to show the
   problem;
