@@ -46,6 +46,8 @@ what the story asks and nothing more.
 A change a user of the CLI would notice updates its page in `docs/` in the same story; the
 product documentation site assembles these pages and generates the command reference from
 `--help` (DNK-66), which is never edited by hand.
+Before opening a pull request, verify the assembled site and regenerate the CLI reference from
+the exact product release set. Never edit generated references by hand.
 
 ## 5. Checks before every push
 
