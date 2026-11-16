@@ -1,7 +1,7 @@
 # GitLab CI template: pull a Donka release artifact and publish it to your own storage.
 #
 #   include:
-#     - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.3.3/templates/gitlab-ci-pull.yml' # x-release-please-version
+#     - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.4.0/templates/gitlab-ci-pull.yml' # x-release-please-version
 #
 #   pull:rules:
 #     extends: .donka-pull
@@ -18,7 +18,7 @@
   variables:
     DONKA_TARGET: main
     DONKA_OUT: dist
-    DONKA_CLI_VERSION: '0.3.3' # x-release-please-version
+    DONKA_CLI_VERSION: '0.4.0' # x-release-please-version
     # Runs this package instead of the GitHub release, e.g. an internal mirror
     DONKA_CLI_PACKAGE: ''
     DONKA_UNPACK: 'false'
