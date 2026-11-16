@@ -1,50 +1,77 @@
-name: 'Release'
+name: Release
+
+# Versions and changelogs from Conventional Commits (DNK-30).
+#
+# 1. A promotion PR merges develop into main (merge commit).
+# 2. On every push to main, release-please keeps one release PR open with the next
+#    version and the CHANGELOG entry.
+# 3. Merging the release PR tags vX.Y.Z and creates the GitHub release; this workflow
+#    then opens a back-merge PR main -> develop (merge commit) so the bump reaches develop.
+#
+# 4. The release ships as a GitHub release asset, donka-cli-X.Y.Z.tgz (`npm pack` of the build),
+#    which the action and the templates run with `npx`. Nothing is published to npm (DNK-21).
+# With GITHUB_TOKEN, CI does not run on the PRs this workflow opens; set a
+# RELEASE_PLEASE_TOKEN secret (fine-grained PAT: contents + pull requests, write) to have it run.
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: write
-  issues: write
   pull-requests: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release-please:
-    name: 'Release Please'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
+    timeout-minutes: 10
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         id: release
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
 
-  publish:
-    name: 'Publish'
-    needs: release-please
-    if: needs.release-please.outputs.release_created
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v3
+      - name: Check out the release
+        if: steps.release.outputs.release_created
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.release.outputs.tag_name }}
+          persist-credentials: false
 
-      - name: Install Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.release.outputs.release_created
         with:
           node-version: 24
-          registry-url: 'https://registry.npmjs.org'
 
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        if: steps.release.outputs.release_created
         with:
           version: 10
           run_install: true
 
-      - name: Build
-        run: pnpm build
-
-      - name: Publish
-        run: pnpm publish --access public --no-git-checks
+      - name: Attach the CLI package to the release
+        if: steps.release.outputs.release_created
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          pnpm build
+          npm pack
+          gh release upload "$TAG" "donka-cli-$VERSION.tgz" --repo "$GITHUB_REPOSITORY"
+
+      - name: Open the back-merge PR into develop
+        if: steps.release.outputs.release_created
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          gh pr create --repo "$GITHUB_REPOSITORY" --base develop --head main \
+            --title "chore: bring release $TAG back into develop" \
+            --body "Merge with a **merge commit** (not squash) so develop and main share the release commit."

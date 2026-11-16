@@ -3,7 +3,7 @@ import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  { ignores: ['dist/'] },
+  { ignores: ['dist/', 'coverage/'] },
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {
@@ -19,6 +19,15 @@ export default defineConfig(
   {
     rules: {
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
+      // node:test runs the promises describe and it return
+      '@typescript-eslint/no-floating-promises': [
+        'error',
+        { allowForKnownSafeCalls: [{ from: 'package', package: 'node:test', name: ['describe', 'it'] }] },
+      ],
     },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
   },
 );

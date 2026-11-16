@@ -1,51 +1,26 @@
 import { defineCommand } from 'citty';
-import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import pc from 'picocolors';
-import { CliError, downloadArtifact, resolveApiOptions, sync, type SyncDeploymentResult } from '../api/client';
+import { CliError, resolveApiOptions } from '../api/client';
 import { atomicWriteFile, extractZipTo } from '../api/extract';
-
-/**
- * Exit codes are part of the contract: pipelines branch on them.
- *   0 downloaded   3 nothing to do   4 no release   1 error   2 usage
- */
-const EXIT_NO_CHANGE = 3;
-const EXIT_NO_RELEASE = 4;
-
-const describeFailure = (result: SyncDeploymentResult, project: string, target: string): CliError => {
-  switch (result.action) {
-    case 'no_access':
-      return new CliError(
-        `The access token cannot reach project "${project}". Check that the project exists and that the token's project scope includes it.`,
-      );
-    case 'no_release':
-      return new CliError(
-        `Nothing is deployed to "${target}" in project "${project}". Deploy a release to it first.`,
-        EXIT_NO_RELEASE,
-      );
-    case 'error':
-      return new CliError(`Could not resolve "${target}" in project "${project}": ${result.code ?? 'unknown error'}`);
-    default:
-      return new CliError(`Unexpected response for "${target}" in project "${project}": ${result.action}`);
-  }
-};
+import { EXIT_NO_CHANGE, fetchArtifact } from '../api/release';
 
 export const pull = defineCommand({
   meta: {
     name: 'pull',
-    description: 'Download the rules artifact for a project target',
+    description: "Download a project's release artifact",
   },
   args: {
     project: {
       type: 'string',
-      description: 'Project key or id (env: GORULES_PROJECT)',
+      description: 'Project key or id (env: DONKA_PROJECT)',
       alias: 'p',
     },
     target: {
       type: 'string',
       description:
-        "Target: 'main', 'branch:<id>', 'commit:<id>', 'release:<version>' or 'env:<key>' (env: GORULES_TARGET)",
+        "Target: 'main' (newest release), 'commit:<release id>', 'release:<version>' or 'env:<staging|production>' (env: DONKA_TARGET)",
       alias: 't',
     },
     out: {
@@ -72,36 +47,28 @@ export const pull = defineCommand({
     },
     current: {
       type: 'string',
-      description: 'Release or commit id already held; exits 3 when unchanged',
+      description:
+        "The commit id from a previous pull (release id, or deployment id for 'env:'); exits 3 when unchanged",
     },
-    url: { type: 'string', description: 'BRMS API URL (env: GORULES_URL)', alias: 'u' },
-    token: { type: 'string', description: 'Access token (env: GORULES_TOKEN)' },
+    url: { type: 'string', description: 'Donka Studio URL (env: DONKA_URL)', alias: 'u' },
+    token: { type: 'string', description: 'CI token from the project settings (env: DONKA_TOKEN)' },
     json: { type: 'boolean', description: 'Print the result as JSON', default: false },
   },
   async run({ args }) {
     const options = resolveApiOptions(args);
-    const project = args.project || process.env.GORULES_PROJECT;
-    const target = args.target || process.env.GORULES_TARGET || 'main';
+    const project = args.project || process.env.DONKA_PROJECT;
+    const target = args.target || process.env.DONKA_TARGET || 'main';
 
     if (!project) {
-      throw new CliError('Missing project. Pass --project or set GORULES_PROJECT.', 2);
+      throw new CliError('Missing project. Pass --project or set DONKA_PROJECT.', 2);
     }
     if (args.delete && !args.unpack) {
       throw new CliError('--delete only applies when extracting. Add --unpack.', 2);
     }
 
-    // A `current` id is echoed back to the server, which answers no_change
-    // rather than re-serving an artifact the caller already holds.
-    const current = args.current ? { commitId: args.current, releaseId: args.current } : undefined;
+    const fetched = await fetchArtifact(options, project, target, args.current);
 
-    const response = await sync(options, [{ project, target, ...(current && { current }) }]);
-    const result = response.deployments[0];
-
-    if (!result) {
-      throw new CliError('The server returned no result for this deployment.');
-    }
-
-    if (result.action === 'no_change') {
+    if (fetched.action === 'no_change') {
       if (args.json) {
         process.stdout.write(JSON.stringify({ action: 'no_change', project, target }) + '\n');
       } else {
@@ -111,18 +78,7 @@ export const pull = defineCommand({
       return;
     }
 
-    if (result.action !== 'load' || !result.artifact) {
-      throw describeFailure(result, project, target);
-    }
-
-    const buffer = await downloadArtifact(options, result.artifact);
-    const digest = createHash('sha256').update(buffer).digest('hex');
-
-    // Verified only when the server supplied a digest: self-hosted installs
-    // without CDN configuration serve the artifact directly and send none.
-    if (result.artifact.sha256 && result.artifact.sha256.toLowerCase() !== digest) {
-      throw new CliError('Artifact checksum mismatch: the download does not match what the server published.');
-    }
+    const { result, buffer, digest, verified } = fetched;
 
     // Default to the project key with no extension: the agent's object
     // storage providers use the object name verbatim as the project key, so a
@@ -161,7 +117,7 @@ export const pull = defineCommand({
       commit: result.commit?.id,
       environment: result.environment?.key ?? undefined,
       sha256: digest,
-      verified: Boolean(result.artifact.sha256),
+      verified,
       files: written,
       ...(args.unpack && { updated }),
       ...(args.delete && { deleted }),

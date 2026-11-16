@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
+import { form } from './commands/form';
 import { mcp } from './commands/mcp';
 import { pull } from './commands/pull';
 import { CliError } from './api/client';
@@ -7,11 +8,12 @@ import { version as VERSION } from '../package.json';
 
 const main = defineCommand({
   meta: {
-    name: 'gorules',
+    name: 'donka',
     version: VERSION,
-    description: 'GoRules CLI',
+    description: 'Donka CLI',
   },
   subCommands: {
+    form,
     mcp,
     pull,
   },

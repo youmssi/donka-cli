@@ -1,0 +1,90 @@
+name: Candidate release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Candidate version in X.Y.Z-rc.N format, for example 0.4.0-rc.1.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: candidate-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Validate candidate source and version
+        id: plan
+        env:
+          VERSION: ${{ inputs.version }}
+          REF: ${{ github.ref_name }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: node scripts/candidate-release.mjs "$VERSION" "$REF" "$SOURCE_COMMIT"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10.33.0
+          run_install: true
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+      - name: Require signing keys
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          [ -n "$COSIGN_PRIVATE_KEY" ] && [ -n "$COSIGN_PASSWORD" ] || { echo "::error::CLI candidate signing secrets are required."; exit 1; }
+      - name: Reject a reused Git tag
+        env:
+          RELEASE_TAG: ${{ steps.plan.outputs.release_tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::Candidate release tag already exists; choose a new -rc.N version."
+            exit 1
+          else
+            result=$?
+            [ "$result" -eq 2 ] || exit "$result"
+          fi
+      - name: Build and sign the versioned CLI package
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          npm pkg set "version=$VERSION"
+          pnpm build
+          npm pack --pack-destination "$RUNNER_TEMP"
+          package="$RUNNER_TEMP/donka-cli-$VERSION.tgz"
+          test -f "$package"
+          sha256sum "$package" > "$package.sha256"
+          cosign sign-blob --yes --key env://COSIGN_PRIVATE_KEY --tlog-upload=false \
+            --output-signature "$package.sig" "$package"
+          cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
+            --signature "$package.sig" "$package"
+      - name: Create, populate, and publish immutable prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.plan.outputs.release_tag }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          package="$RUNNER_TEMP/donka-cli-$VERSION.tgz"
+          gh release create "$RELEASE_TAG" --target "$SOURCE_COMMIT" --draft --prerelease --latest=false \
+            --title "Donka CLI $VERSION candidate" \
+            --notes "Signed Donka CLI candidate $VERSION from $SOURCE_COMMIT. This prerelease is for isolated staging, not production."
+          gh release upload "$RELEASE_TAG" "$package" "$package.sig" "$package.sha256"
+          release_id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.id')
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            -F draft=false -F prerelease=true -f make_latest=false >/dev/null
+          gh release view "$RELEASE_TAG" --json isImmutable,isPrerelease,tagName \
+            | jq -e --arg tag "$RELEASE_TAG" '.isImmutable == true and .isPrerelease == true and .tagName == $tag'

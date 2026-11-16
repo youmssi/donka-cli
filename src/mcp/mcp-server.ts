@@ -156,7 +156,7 @@ export class BridgeMcpServer {
 
   private createMcpServer(): McpServer {
     const mcpServer = new McpServer(
-      { name: 'gorules-brms', version: '1.0.0' },
+      { name: 'donka', version: '1.0.0' },
       {
         capabilities: { tools: {} },
         instructions: INSTRUCTIONS,

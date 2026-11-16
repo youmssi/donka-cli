@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - develop
 
 permissions:
   contents: read
@@ -13,22 +14,24 @@ jobs:
   codequality:
     name: 'Code quality'
     runs-on: ubuntu-latest
-    continue-on-error: true
-    timeout-minutes: 3
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
       - name: Install Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
 
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
-          version: 10
+          package_json_file: package.json
           run_install: true
+
+      - name: Test the candidate release policy
+        run: node --test scripts/candidate-release.test.mjs
 
       - name: 'Lint'
         run: pnpm lint
@@ -38,3 +41,121 @@ jobs:
 
       - name: 'Typecheck'
         run: pnpm typecheck
+
+      - name: Build and test with coverage
+        run: pnpm test:coverage
+
+      - name: Dependency security
+        run: pnpm audit:security
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: cli-coverage
+          path: |
+            coverage/
+            !coverage/fixtures/
+          retention-days: 7
+
+  action:
+    name: 'GitHub action'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          package_json_file: package.json
+          run_install: true
+
+      - name: Pack the CLI and start a fake Studio
+        id: pack
+        run: |
+          pnpm build
+          npm pack --pack-destination "$RUNNER_TEMP"
+          echo "package=$(ls "$RUNNER_TEMP"/donka-cli-*.tgz)" >> "$GITHUB_OUTPUT"
+          node test/serve.ts 4949 &
+          sleep 1
+
+      - uses: ./actions/pull
+        id: pull
+        with:
+          url: http://127.0.0.1:4949
+          token: dnk_ci_test-secret-value
+          project: credit-pme
+          target: env:staging
+          out: ${{ runner.temp }}/rules
+          cli-package: ${{ steps.pack.outputs.package }}
+
+      - uses: ./actions/pull
+        id: unchanged
+        with:
+          url: http://127.0.0.1:4949
+          token: dnk_ci_test-secret-value
+          project: credit-pme
+          target: env:staging
+          current: ${{ steps.pull.outputs.commit }}
+          out: ${{ runner.temp }}/rules
+          cli-package: ${{ steps.pack.outputs.package }}
+
+      - name: Check the outputs
+        env:
+          CHANGED: ${{ steps.pull.outputs.changed }}
+          VERSION: ${{ steps.pull.outputs.version }}
+          UNCHANGED: ${{ steps.unchanged.outputs.changed }}
+        run: |
+          test "$CHANGED" = true
+          test "$VERSION" = 1.0.0
+          test "$UNCHANGED" = false
+          test -f "$RUNNER_TEMP/rules/credit-pme"
+
+      - name: Write a form from release 1.0.0's contract
+        run: |
+          node dist/main.js form pull --target release:1.0.0 --decision loan --out "$RUNNER_TEMP/contracts"
+          node dist/main.js form init --contract "$RUNNER_TEMP/contracts/loan/input.schema.json" --out "$RUNNER_TEMP/loan-form.json"
+        env:
+          DONKA_URL: http://127.0.0.1:4949
+          DONKA_TOKEN: dnk_ci_test-secret-value
+          DONKA_PROJECT: credit-pme
+
+      - uses: ./actions/form-check
+        id: matches
+        with:
+          url: http://127.0.0.1:4949
+          token: dnk_ci_test-secret-value
+          project: credit-pme
+          target: release:1.0.0
+          decision: loan
+          form: ${{ runner.temp }}/loan-form.json
+          cli-package: ${{ steps.pack.outputs.package }}
+
+      # 1.1.0 adds a required field the form lacks, so this check must fail.
+      - uses: ./actions/form-check
+        id: drifted
+        continue-on-error: true
+        with:
+          url: http://127.0.0.1:4949
+          token: dnk_ci_test-secret-value
+          project: credit-pme
+          target: main
+          decision: loan
+          form: ${{ runner.temp }}/loan-form.json
+          cli-package: ${{ steps.pack.outputs.package }}
+
+      - name: Check the form check outcomes
+        env:
+          MATCHES: ${{ steps.matches.outputs.differences }}
+          DRIFTED: ${{ steps.drifted.outcome }}
+          DIFFERENCES: ${{ steps.drifted.outputs.differences }}
+        run: |
+          test "$MATCHES" = '[]'
+          test "$DRIFTED" = failure
+          test "$(echo "$DIFFERENCES" | jq -r '.[0].field')" = loan.termMonths

@@ -1,0 +1,36 @@
+# GitLab CI template: fail the pipeline when a form no longer matches the input
+# contract of the Donka decision it feeds.
+#
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.3.3/templates/gitlab-ci-form-check.yml' # x-release-please-version
+#
+#   check:form:
+#     extends: .donka-form-check
+#     variables:
+#       DONKA_PROJECT: credit-pme
+#       DONKA_TARGET: env:production
+#       DONKA_DECISION: retail/scorecard
+#       DONKA_FORM: forms/scorecard.json
+#
+# DONKA_URL and DONKA_TOKEN come from CI/CD variables; mask and protect the token
+# (a CI token issued in the project's settings).
+
+.donka-form-check:
+  image: node:24-alpine
+  variables:
+    DONKA_TARGET: main
+    DONKA_CLI_VERSION: '0.3.3' # x-release-please-version
+    # Runs this package instead of the GitHub release, e.g. an internal mirror
+    DONKA_CLI_PACKAGE: ''
+  script:
+    - |
+      set -eu
+
+      if [ -z "${DONKA_PROJECT:-}" ] || [ -z "${DONKA_DECISION:-}" ] || [ -z "${DONKA_FORM:-}" ]; then
+        echo "Set DONKA_PROJECT, DONKA_DECISION and DONKA_FORM." >&2
+        exit 2
+      fi
+      package="${DONKA_CLI_PACKAGE:-https://github.com/youmssi/donka-cli/releases/download/v${DONKA_CLI_VERSION}/donka-cli-${DONKA_CLI_VERSION}.tgz}"
+
+      npx --yes --package "$package" donka form pull --decision "$DONKA_DECISION" --out contracts
+      npx --yes --package "$package" donka form check --contract "contracts/$DONKA_DECISION/input.schema.json" --form "$DONKA_FORM"

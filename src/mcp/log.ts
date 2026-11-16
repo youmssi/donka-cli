@@ -21,7 +21,7 @@ export function printBanner(host: string, port: number, token: string) {
   const wsUrl = `ws://${base}`;
 
   const content = [
-    pc.bold(pc.cyan('GoRules MCP Bridge')),
+    pc.bold(pc.cyan('Donka MCP Bridge')),
     '',
     `${pc.dim('MCP')}        ${pc.dim('→')}  ${pc.cyan(mcpUrl)}`,
     `${pc.dim('Evaluate')}   ${pc.dim('→')}  ${pc.cyan(evalUrl)}`,

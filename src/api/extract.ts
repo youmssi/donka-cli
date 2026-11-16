@@ -5,7 +5,7 @@ import { CliError } from './client';
 import { readZip } from './zip';
 
 /** Zip paths are untrusted input; never let one escape the output directory. */
-const safeJoin = (root: string, entryPath: string): string => {
+export const safeJoin = (root: string, entryPath: string): string => {
   const target = resolve(root, entryPath);
   if (target !== root && !target.startsWith(root + sep)) {
     throw new CliError(`Refusing to write outside the output directory: ${entryPath}`);
@@ -105,7 +105,7 @@ export interface ExtractResult {
  * through it.
  */
 export const atomicWriteFile = async (file: string, content: Buffer): Promise<void> => {
-  const tmp = join(dirname(file), `.${randomBytes(6).toString('hex')}.gorules-tmp`);
+  const tmp = join(dirname(file), `.${randomBytes(6).toString('hex')}.donka-tmp`);
   try {
     await writeFile(tmp, content);
     await rename(tmp, file);

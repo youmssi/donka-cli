@@ -1,14 +1,59 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bump-minor-pre-major": true,
+  "changelog-sections": [
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Bug Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance"
+    },
+    {
+      "type": "build",
+      "section": "Build",
+      "hidden": true
+    },
+    {
+      "type": "refactor",
+      "section": "Refactoring",
+      "hidden": true
+    },
+    {
+      "type": "docs",
+      "section": "Documentation",
+      "hidden": true
+    },
+    {
+      "type": "test",
+      "section": "Tests",
+      "hidden": true
+    },
+    {
+      "type": "chore",
+      "section": "Miscellaneous",
+      "hidden": true
+    }
+  ],
   "packages": {
     ".": {
-      "package-name": "@gorules/cli",
+      "package-name": "donka-cli",
       "release-type": "node",
+      "include-component-in-tag": false,
       "extra-files": [
         "actions/pull/action.yml",
+        "actions/form-check/action.yml",
         "templates/gitlab-ci-pull.yml",
+        "templates/gitlab-ci-form-check.yml",
         "templates/azure-pipelines-pull.yml",
-        "README.md"
+        "templates/azure-pipelines-form-check.yml",
+        "README.md",
+        "docs/ci-templates.md"
       ]
     }
   }

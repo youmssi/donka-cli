@@ -1,59 +1,57 @@
-# GitLab CI template: pull a rules artifact and publish it to your own storage.
+# GitLab CI template: pull a Donka release artifact and publish it to your own storage.
 #
 #   include:
-#     - remote: 'https://raw.githubusercontent.com/gorules/cli/cli-v0.3.3/templates/gitlab-ci-pull.yml' # x-release-please-version
+#     - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.3.3/templates/gitlab-ci-pull.yml' # x-release-please-version
 #
 #   pull:rules:
-#     extends: .gorules-pull
-#     # project and target normally arrive in the BRMS webhook payload
-#     # (GRL_PAYLOAD); set GORULES_PROJECT / GORULES_TARGET only for runs
-#     # that have no payload, e.g. via the Run pipeline form or a schedule
+#     extends: .donka-pull
+#     variables:
+#       DONKA_PROJECT: credit-pme
+#       DONKA_TARGET: env:production
 #
-# GORULES_URL and GORULES_TOKEN come from CI/CD variables; mask and protect the
-# token. GitLab puts CI/CD variables in the environment automatically, so the
-# CLI picks them up with no further wiring.
-#
-# When BRMS triggers the pipeline it passes GRL_PAYLOAD, and the project and
-# target are taken from that instead, so the same job serves both a manual run
-# and a webhook-driven one.
+# DONKA_URL and DONKA_TOKEN come from CI/CD variables; mask and protect the token
+# (a CI token issued in the project's settings). GitLab puts CI/CD variables in
+# the environment automatically, so the CLI picks them up with no further wiring.
 
-.gorules-pull:
+.donka-pull:
   image: node:24-alpine
   variables:
-    GORULES_OUT: dist
-    GORULES_CLI_VERSION: '0.3.3' # x-release-please-version
-    GORULES_UNPACK: 'false'
+    DONKA_TARGET: main
+    DONKA_OUT: dist
+    DONKA_CLI_VERSION: '0.3.3' # x-release-please-version
+    # Runs this package instead of the GitHub release, e.g. an internal mirror
+    DONKA_CLI_PACKAGE: ''
+    DONKA_UNPACK: 'false'
     # 'true' deletes files in the destination that are not in the artifact
-    GORULES_DELETE: 'false'
+    DONKA_DELETE: 'false'
   script:
     - |
       set -eu
 
-      if [ -n "${GRL_PAYLOAD:-}" ]; then
-        GORULES_PROJECT=$(printf '%s' "$GRL_PAYLOAD" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);process.stdout.write(p.project?.key||p.projectId||"")})')
-        GORULES_TARGET=$(printf '%s' "$GRL_PAYLOAD" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);process.stdout.write(p.target||"main")})')
-        export GORULES_PROJECT GORULES_TARGET
-        echo "Triggered by BRMS: $GORULES_PROJECT $GORULES_TARGET"
+      if [ -z "${DONKA_PROJECT:-}" ]; then
+        echo "Set DONKA_PROJECT to the project key." >&2
+        exit 2
       fi
+      package="${DONKA_CLI_PACKAGE:-https://github.com/youmssi/donka-cli/releases/download/v${DONKA_CLI_VERSION}/donka-cli-${DONKA_CLI_VERSION}.tgz}"
 
-      set -- pull --out "$GORULES_OUT" --json
-      if [ -n "${GORULES_NAME:-}" ]; then set -- "$@" --name "$GORULES_NAME"; fi
-      if [ -n "${GORULES_CURRENT:-}" ]; then set -- "$@" --current "$GORULES_CURRENT"; fi
-      if [ "${GORULES_UNPACK}" = "true" ]; then set -- "$@" --unpack; fi
-      if [ "${GORULES_DELETE}" = "true" ]; then set -- "$@" --delete; fi
+      set -- pull --out "$DONKA_OUT" --json
+      if [ -n "${DONKA_NAME:-}" ]; then set -- "$@" --name "$DONKA_NAME"; fi
+      if [ -n "${DONKA_CURRENT:-}" ]; then set -- "$@" --current "$DONKA_CURRENT"; fi
+      if [ "${DONKA_UNPACK}" = "true" ]; then set -- "$@" --unpack; fi
+      if [ "${DONKA_DELETE}" = "true" ]; then set -- "$@" --delete; fi
 
       # Exit 3 means the target has not moved: a normal outcome, not a failure
       set +e
-      npx --yes "@gorules/cli@${GORULES_CLI_VERSION}" "$@" > result.json
+      npx --yes --package "$package" donka "$@" > result.json
       code=$?
       set -e
 
       if [ "$code" -eq 3 ]; then
         {
           echo "RULES_CHANGED=false"
-          echo "RULES_PROJECT=${GORULES_PROJECT:-}"
-          echo "RULES_TARGET=${GORULES_TARGET:-main}"
-        } > gorules.env
+          echo "RULES_PROJECT=${DONKA_PROJECT}"
+          echo "RULES_TARGET=${DONKA_TARGET:-main}"
+        } > donka.env
         echo "Target unchanged, nothing downloaded."
         exit 0
       fi
@@ -61,14 +59,14 @@
 
       {
         echo "RULES_CHANGED=true"
-        echo "RULES_PROJECT=${GORULES_PROJECT:-}"
-        echo "RULES_TARGET=${GORULES_TARGET:-main}"
-        node -e 'const r=require("./result.json");console.log("RULES_VERSION="+(r.version||""));console.log("RULES_RELEASE="+(r.release||""));console.log("RULES_SHA256="+(r.sha256||""))'
-      } > gorules.env
-      cat gorules.env
+        echo "RULES_PROJECT=${DONKA_PROJECT}"
+        echo "RULES_TARGET=${DONKA_TARGET:-main}"
+        node -e 'const r=require("./result.json");console.log("RULES_VERSION="+(r.version||""));console.log("RULES_RELEASE="+(r.release||""));console.log("RULES_COMMIT="+(r.commit||""));console.log("RULES_SHA256="+(r.sha256||""))'
+      } > donka.env
+      cat donka.env
   artifacts:
     paths:
-      - $GORULES_OUT
+      - $DONKA_OUT
     # Downstream jobs read RULES_CHANGED / RULES_VERSION as ordinary variables
     reports:
-      dotenv: gorules.env
+      dotenv: donka.env

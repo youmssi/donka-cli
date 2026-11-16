@@ -1,0 +1,6 @@
+packages:
+  - '.'
+
+overrides:
+  # DNK-49: the patched release in minimatch's existing major range.
+  brace-expansion: 5.0.11

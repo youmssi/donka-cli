@@ -1,0 +1,73 @@
+# Azure Pipelines steps template: fail the job when a form no longer matches the
+# input contract of the Donka decision it feeds.
+#
+#   resources:
+#     repositories:
+#       - repository: donka
+#         type: github
+#         name: youmssi/donka-cli
+#         ref: refs/tags/v0.3.3 # x-release-please-version
+#         endpoint: <your GitHub service connection>
+#
+#   jobs:
+#     - job: check_form
+#       pool:
+#         vmImage: ubuntu-latest
+#       steps:
+#         - template: templates/azure-pipelines-form-check.yml@donka
+#           parameters:
+#             url: https://donka.bank.example
+#             project: credit-pme
+#             target: env:production
+#             decision: retail/scorecard
+#             form: forms/scorecard.json
+#
+# DONKA_TOKEN must exist as a secret variable (a CI token issued in the
+# project's settings), either in the pipeline or in a linked variable group.
+
+parameters:
+  - name: url
+    type: string
+  - name: project
+    type: string
+  - name: target
+    type: string
+    default: main
+  - name: decision
+    type: string
+  - name: form
+    type: string
+  - name: cliVersion
+    type: string
+    default: 0.3.3 # x-release-please-version
+  # Runs this package instead of the GitHub release, e.g. an internal mirror
+  - name: cliPackage
+    type: string
+    default: ''
+
+steps:
+  # Microsoft-hosted images already ship Node; self-hosted agents may not.
+  - task: NodeTool@0
+    displayName: Use Node 24
+    inputs:
+      versionSpec: '24.x'
+
+  - script: |
+      set -euo pipefail
+
+      package="${{ parameters.cliPackage }}"
+      if [ -z "$package" ]; then
+        package="https://github.com/youmssi/donka-cli/releases/download/v${{ parameters.cliVersion }}/donka-cli-${{ parameters.cliVersion }}.tgz"
+      fi
+      contracts="$(Agent.TempDirectory)/donka-contracts"
+
+      npx --yes --package "$package" donka form pull --decision "${{ parameters.decision }}" --out "$contracts"
+      npx --yes --package "$package" donka form check --contract "$contracts/${{ parameters.decision }}/input.schema.json" --form "${{ parameters.form }}"
+    displayName: donka form check
+    env:
+      DONKA_URL: ${{ parameters.url }}
+      DONKA_PROJECT: ${{ parameters.project }}
+      DONKA_TARGET: ${{ parameters.target }}
+      # Secret variables are NOT mapped into the environment automatically;
+      # without this line the token is simply absent.
+      DONKA_TOKEN: $(DONKA_TOKEN)

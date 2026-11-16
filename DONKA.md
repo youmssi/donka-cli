@@ -8,9 +8,38 @@ This repository is a fork of [gorules/cli](https://github.com/gorules/cli) (MIT)
 history is preserved; the `upstream` remote points at it. The original license and copyright
 notice in `LICENSE` stay as they are.
 
-## Planned Donka changes (see donka/docs/ROADMAP.md, epic F2)
+## What Donka changes (DNK-21)
 
-- Rename the command to `donka` and the package to `@donka/cli`
-- `DONKA_URL`, `DONKA_TOKEN`, `DONKA_PROJECT`, `DONKA_TARGET` (the old `GORULES_*` names are not kept)
-- Point at Studio's `rules-sync` API (same request and response shape, Donka paths)
-- Rebrand the CI templates and the MCP bridge
+- The command is `donka`, the package `@donka/cli`; settings are `DONKA_URL`, `DONKA_TOKEN`,
+  `DONKA_PROJECT` and `DONKA_TARGET` (the `GORULES_*` names are not kept).
+- `pull` talks to Studio's `rules-sync` API under `/api/v1` with a project CI token. The request
+  and response keep upstream's shape, and the exit codes are unchanged. Targets are `main`,
+  `commit:<release id>`, `release:<version>` and `env:<key>`; Donka has no branches.
+- The GitHub action and the GitLab and Azure templates use the Donka names. The webhook payload
+  (`GRL_PAYLOAD`) is gone: Studio does not start pipelines, so project and target are set in the
+  pipeline.
+- Nothing is published to npm. Each GitHub release carries `donka-cli-X.Y.Z.tgz`, which the
+  templates run with `npx --package`; `cli-package` points them at a mirror instead.
+- `pnpm test` runs the built CLI and each template's script against a fake Studio, and exercises
+  the MCP bridge over real HTTP and WebSocket connections. CI also runs the GitHub action itself.
+- `pnpm test:coverage` enforces 70% executable TypeScript line coverage, including unimported files.
+  `pnpm audit:security` rejects high and critical dependency advisories.
+- The MCP bridge carries Donka's name. Studio's editor does not connect to it yet.
+
+## What Donka adds
+
+- `donka form` (DNK-38): `form pull` writes each decision's input contract from a target's
+  artifact (resolved and verified like `pull`); `form check` compares a form definition with a
+  contract and exits `1` on any difference; `form init` writes a starting form from a contract.
+  `actions/form-check` and the `*-form-check.yml` templates run the check in CI.
+
+## Planned
+
+- The CLI stays the developers' tool (`pull`, `form`, `mcp`). Server administration lives in
+  `donka-admin`, a separate binary in Studio's image, so a bank's server needs no Node.js
+  (DNK-74).
+- Release tarballs gain signatures and provenance, and the repository runs OpenSSF Scorecard
+  (DNK-64, DNK-73).
+- The MCP bridge connects to Studio's editor in Phase 3.
+
+Where each capability stands across Donka: Studio's `docs/capability-map.md`.
