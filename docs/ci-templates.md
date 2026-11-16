@@ -14,7 +14,7 @@ jobs:
   rules:
     runs-on: ubuntu-latest
     steps:
-      - uses: youmssi/donka-cli/actions/pull@v0.3.3 # x-release-please-version
+      - uses: youmssi/donka-cli/actions/pull@v0.4.0 # x-release-please-version
         id: rules
         with:
           url: https://donka.bank.example
@@ -62,7 +62,7 @@ moved.
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.3.3/templates/gitlab-ci-pull.yml' # x-release-please-version
+  - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.4.0/templates/gitlab-ci-pull.yml' # x-release-please-version
 
 pull:rules:
   extends: .donka-pull
@@ -101,7 +101,7 @@ resources:
     - repository: donka
       type: github
       name: youmssi/donka-cli
-      ref: refs/tags/v0.3.3 # x-release-please-version
+      ref: refs/tags/v0.4.0 # x-release-please-version
       endpoint: <your GitHub service connection>
 
 jobs:
@@ -138,7 +138,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: youmssi/donka-cli/actions/form-check@v0.3.3 # x-release-please-version
+      - uses: youmssi/donka-cli/actions/form-check@v0.4.0 # x-release-please-version
         with:
           url: https://donka.bank.example
           token: ${{ secrets.DONKA_TOKEN }}
@@ -171,7 +171,7 @@ Each difference is also an error annotation on the form file.
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.3.3/templates/gitlab-ci-form-check.yml' # x-release-please-version
+  - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.4.0/templates/gitlab-ci-form-check.yml' # x-release-please-version
 
 check:form:
   extends: .donka-form-check

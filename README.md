@@ -57,7 +57,7 @@ fails a pipeline the day a form stops matching it.
 export DONKA_URL=https://donka.bank.example
 export DONKA_TOKEN=dnk_ci_...                 # the CI token, read-only
 
-VERSION=0.3.3 # x-release-please-version
+VERSION=0.4.0 # x-release-please-version
 npx --yes --package "https://github.com/youmssi/donka-cli/releases/download/v$VERSION/donka-cli-$VERSION.tgz" \
   donka pull --project credit-pme --target env:production --out ./dist
 
@@ -85,7 +85,7 @@ Every option, naming rule and example is in [docs/pull.md](docs/pull.md).
 
 ```yaml
 # GitHub Actions
-- uses: youmssi/donka-cli/actions/pull@v0.3.3 # x-release-please-version
+- uses: youmssi/donka-cli/actions/pull@v0.4.0 # x-release-please-version
   with:
     url: https://donka.bank.example
     token: ${{ secrets.DONKA_TOKEN }}

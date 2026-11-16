@@ -2,7 +2,7 @@
 # contract of the Donka decision it feeds.
 #
 #   include:
-#     - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.3.3/templates/gitlab-ci-form-check.yml' # x-release-please-version
+#     - remote: 'https://raw.githubusercontent.com/youmssi/donka-cli/v0.4.0/templates/gitlab-ci-form-check.yml' # x-release-please-version
 #
 #   check:form:
 #     extends: .donka-form-check
@@ -19,7 +19,7 @@
   image: node:24-alpine
   variables:
     DONKA_TARGET: main
-    DONKA_CLI_VERSION: '0.3.3' # x-release-please-version
+    DONKA_CLI_VERSION: '0.4.0' # x-release-please-version
     # Runs this package instead of the GitHub release, e.g. an internal mirror
     DONKA_CLI_PACKAGE: ''
   script:
