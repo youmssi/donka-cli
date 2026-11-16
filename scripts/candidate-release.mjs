@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import process from 'node:process';
 
 const candidatePattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)-rc\.[1-9]\d*$/;
 const commitPattern = /^[a-f0-9]{40}$/;
@@ -24,13 +25,14 @@ if (import.meta.url === scriptUrl) {
   try {
     const [version, ref, sha] = process.argv.slice(2);
     const plan = candidatePlan({ version, ref, sha });
-    const output = [
-      `version=${plan.version}`,
-      `release_tag=${plan.releaseTag}`,
-      `image_tag=${plan.imageTags[0]}`,
-      `asset_name=${plan.assetName}`,
-      `source_commit=${plan.sourceCommit}`,
-    ].join('\n') + '\n';
+    const output =
+      [
+        `version=${plan.version}`,
+        `release_tag=${plan.releaseTag}`,
+        `image_tag=${plan.imageTags[0]}`,
+        `asset_name=${plan.assetName}`,
+        `source_commit=${plan.sourceCommit}`,
+      ].join('\n') + '\n';
     if (process.env.GITHUB_OUTPUT) {
       const { appendFile } = await import('node:fs/promises');
       await appendFile(process.env.GITHUB_OUTPUT, output);

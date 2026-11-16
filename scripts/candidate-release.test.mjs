@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { URL } from 'node:url';
 import { candidatePlan } from './candidate-release.mjs';
 
 const source = { ref: 'develop', sha: 'a'.repeat(40) };
@@ -17,7 +18,10 @@ test('candidate plan accepts independent SemVer release candidates', () => {
 test('candidate image plan cannot emit a stable, edge, or latest alias', () => {
   const { imageTags } = candidatePlan({ ...source, version: '0.4.0-rc.12' });
   assert.deepEqual(imageTags, ['0.4.0-rc.12']);
-  assert.equal(imageTags.some((tag) => ['edge', 'latest', '0.4', '0'].includes(tag)), false);
+  assert.equal(
+    imageTags.some((tag) => ['edge', 'latest', '0.4', '0'].includes(tag)),
+    false,
+  );
 });
 
 test('candidate plan rejects stable, malformed, and padded versions', () => {
