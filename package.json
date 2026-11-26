@@ -1,6 +1,6 @@
 {
   "name": "@donka/cli",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "Command-line tool for Donka: pull release artifacts into CI/CD pipelines",
   "homepage": "https://github.com/youmssi/donka-cli",
   "repository": {
